@@ -153,7 +153,11 @@ export function ClaritaApp() {
           <button className="theme-toggle" onClick={() => setActiveTheme(theme === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <button className="privacy-pill" onClick={() => user?.is_anonymous === false ? setScreen("settings") : setScreen("auth")}><LockKeyhole size={14} /> {user?.is_anonymous === false ? "Account" : user ? "Secure history" : "Sign in"} · Private</button>
+          <button className="privacy-pill" onClick={() => user?.is_anonymous === false ? setScreen("settings") : setScreen("auth")}>
+            <LockKeyhole size={14} />
+            <span className="privacy-pill__label">{user?.is_anonymous === false ? "Account" : user ? "Secure history" : "Sign in"}</span>
+            <span className="privacy-pill__suffix">· Private</span>
+          </button>
         </div>
       </header>
 
