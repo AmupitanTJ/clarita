@@ -3,6 +3,7 @@ import {
   buildChatInput,
   CHAT_INSTRUCTIONS,
   chatReplyJsonSchema,
+  inferConversationPhase,
   type ChatHistoryItem,
   type ChatReply,
 } from "@/lib/chat";
@@ -44,7 +45,47 @@ function gratitudeFallback(message: string): ChatReply {
   };
 }
 
-function reviewedFallback(message: string, mood: MoodId): ChatReply {
+function exploratoryFallback(message: string, mood: MoodId, history: ChatHistoryItem[]): ChatReply {
+  const isFollowUp = history.some((item) => item.role === "assistant");
+  const openings: Record<MoodId, string> = {
+    worried: "I’m sorry something is weighing on you. You don’t have to explain it perfectly or all at once—I’m here to listen before trying to fix it.",
+    sad: "I’m sorry this feels heavy. Take your time; I’d like to understand what happened before offering an answer.",
+    lonely: "I’m glad you said it instead of carrying the loneliness silently. I’m here with you, and you can share only as much as feels comfortable.",
+    grateful: "I’d love to hear what has stirred that gratitude in you. Let’s stay with your story before reaching for a lesson.",
+    direction: "I’d like to understand where you feel uncertain before offering direction. You don’t need to have it all sorted out first.",
+    faith: "That sounds worth exploring honestly and without rushing. I’d like to understand the question as you are experiencing it.",
+  };
+  const questions: Record<MoodId, string> = {
+    worried: "What has been worrying you, and would you like me simply to listen, pray with you, encourage you, or help you think through it?",
+    sad: "What has been feeling heavy, and would listening, prayer, encouragement, or help thinking it through serve you best right now?",
+    lonely: "When do you feel the loneliness most strongly, and would you prefer company in conversation, prayer, encouragement, or practical ideas?",
+    grateful: "What happened that made gratitude rise in you today?",
+    direction: "What area do you need guidance in, and would you like prayer, biblical encouragement, or help thinking through a next step?",
+    faith: "What question about faith has been sitting with you most, and would you like me to listen, explore Scripture with you, or pray with you?",
+  };
+  const followUpQuestions: Record<MoodId, string> = {
+    worried: "What happened, or what thought keeps returning when this worry feels strongest?",
+    sad: "What part of this has been hardest to carry today?",
+    lonely: "What do you most wish someone understood or offered you in this situation?",
+    grateful: "How has this changed the way you see God’s care in your life?",
+    direction: `What about ${message.trim().replace(/[.:!?]+$/, "").toLowerCase()} feels uncertain—a decision, a delay, a closed door, or something else?`,
+    faith: "What makes this faith question especially important to you right now?",
+  };
+
+  return {
+    message: isFollowUp
+      ? "Thank you—that gives me a clearer place to stay with you. We can take this one step at a time."
+      : openings[mood],
+    biblicalConnections: [],
+    question: isFollowUp ? followUpQuestions[mood] : questions[mood],
+    prayer: null,
+    safetyLevel: "ordinary",
+    source: "reviewed",
+  };
+}
+
+function reviewedFallback(message: string, mood: MoodId, history: ChatHistoryItem[]): ChatReply {
+  if (inferConversationPhase(message, history) === "explore") return exploratoryFallback(message, mood, history);
   if (/\b(grateful|thankful|thank\s+god|blessed|gratitude)\b/i.test(message) || mood === "grateful") return gratitudeFallback(message);
   const reviewed = getReviewedResponse(mood, message);
   return {
@@ -102,7 +143,7 @@ export async function POST(request: Request) {
 
   const reviewed = getReviewedResponse(mood, message);
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return Response.json(reviewedFallback(message, mood));
+  if (!apiKey) return Response.json(reviewedFallback(message, mood, history));
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -124,6 +165,6 @@ export async function POST(request: Request) {
     return Response.json({ ...reply, source: "generated" } satisfies ChatReply);
   } catch (error) {
     console.error("Clarita chat fell back to reviewed content", error instanceof Error ? error.message : "unknown error");
-    return Response.json(reviewedFallback(message, mood));
+    return Response.json(reviewedFallback(message, mood, history));
   }
 }

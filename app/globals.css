@@ -175,7 +175,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .conversation-list > button:hover, .conversation-list > button.active { background: var(--mist); color: var(--teal-dark); }
 .conversation-list > button span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
 .conversation-list > button small { font-size: 8px; opacity: .75; }
-.conversation__main { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 76px); height: calc(100dvh - 76px); }
+.conversation__main { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 76px); height: calc(100dvh - 76px); overflow: hidden; }
 .conversation__header { border-bottom: 1px solid var(--line); padding: 13px clamp(16px, 4vw, 42px); display: flex; align-items: center; justify-content: space-between; background: var(--surface-soft); }
 .conversation__header > div { display: flex; align-items: center; gap: 10px; }
 .conversation__header .brand__mark { width: 33px; height: 33px; }
@@ -218,7 +218,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes breathe { 50% { transform: scale(1.08); opacity: .75; } }
-.conversation-composer { position: relative; margin: 0 clamp(16px, 7vw, 100px) 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); padding: 12px 56px 22px 16px; }
+.conversation-composer { position: relative; z-index: 2; align-self: end; margin: 0 clamp(16px, 7vw, 100px) 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); padding: 12px 56px 22px 16px; }
 .conversation-composer textarea { width: 100%; min-height: 56px; max-height: 180px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 13px; line-height: 1.6; }
 .conversation-composer > button { position: absolute; right: 13px; top: 13px; width: 38px; height: 38px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--teal); color: white; cursor: pointer; }
 .conversation-composer > button:disabled { opacity: .42; cursor: default; }

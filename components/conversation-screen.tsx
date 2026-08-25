@@ -58,7 +58,8 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const userId = user?.id;
 
   const openConversation = useCallback(async (conversationId: string) => {
@@ -99,7 +100,11 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   }, [onNotice, openConversation, supabase, userId]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const stream = streamRef.current;
+    if (stream) stream.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
+    if (!isSending && messages.at(-1)?.role === "assistant") {
+      composerRef.current?.focus({ preventScroll: true });
+    }
   }, [isSending, messages]);
 
   function startNewConversation(seed = "") {
@@ -143,7 +148,12 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       });
       if (userMessageError) throw userMessageError;
 
-      const history: ChatHistoryItem[] = priorMessages.slice(-10).map((item) => ({ role: item.role, content: item.content }));
+      const history: ChatHistoryItem[] = priorMessages.slice(-10).map((item) => ({
+        role: item.role,
+        content: item.role === "assistant" && item.reply?.question
+          ? `${item.content}\nFollow-up question: ${item.reply.question}`
+          : item.content,
+      }));
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -215,7 +225,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
           </div>
         </header>
 
-        <div className="message-stream" aria-live="polite">
+        <div className="message-stream" aria-live="polite" ref={streamRef}>
           {isLoadingHistory ? (
             <div className="conversation-loading"><LoaderCircle className="spin" /> Opening your conversation…</div>
           ) : messages.length === 0 ? (
@@ -234,11 +244,11 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
             messages.map((message) => <ConversationMessage key={message.id} message={message} />)
           )}
           {isSending && <div className="assistant-thinking"><BrandMark compact /><span>Clarita is listening and reflecting…</span></div>}
-          <div ref={endRef} />
         </div>
 
         <form className="conversation-composer" onSubmit={submit}>
           <textarea
+            ref={composerRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -253,7 +263,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
             maxLength={3000}
           />
           <button type="submit" disabled={!draft.trim() || isSending} aria-label="Send message"><Send size={18} /></button>
-          <small><Sparkles size={11} /> Enter to send · Shift + Enter for a new line</small>
+          <small><Sparkles size={11} /> {messages.at(-1)?.role === "assistant" ? "Clarita is listening · Take your time" : "Enter to send · Shift + Enter for a new line"}</small>
         </form>
       </div>
     </section>

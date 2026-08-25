@@ -19,6 +19,26 @@ export type ChatReply = {
 
 export type ChatHistoryItem = { role: "user" | "assistant"; content: string };
 
+export type ConversationPhase = "explore" | "support";
+
+const broadOpeners = /\b(i need (?:some )?(?:guidance|direction|help|advice)|guide me|help me|i(?:'m| am) (?:worried|sad|lonely|confused|lost|stuck|struggling)|i don(?:'t|’t) know what to do|what should i do)\b/i;
+const lifeAreas = /\b(work|job|career|business|school|study|marriage|relationship|family|parent|child|friend|church|faith|ministry|money|finance|health|grief|loss|decision|calling|future)\b/i;
+const situationDetails = /\b(because|since|after|before|when|whether|between|happened|offered|said|did|can(?:'t|not)|could(?:'t| not)|want to|trying to|deciding|considering)\b/i;
+
+export function inferConversationPhase(message: string, history: ChatHistoryItem[]): ConversationPhase {
+  const clean = message.replace(/\s+/g, " ").trim();
+  const wordCount = clean.split(" ").filter(Boolean).length;
+  const hasPriorUserDetail = history.some((item) => item.role === "user" && item.content.trim().split(/\s+/).length >= 10);
+  const hasArea = lifeAreas.test(clean);
+  const hasSituation = situationDetails.test(clean) || wordCount >= 14;
+
+  if (hasPriorUserDetail || hasSituation) return "support";
+  if (broadOpeners.test(clean) && wordCount <= 14) return "explore";
+  if (hasArea && wordCount <= 8) return "explore";
+  if (history.length === 0 && wordCount <= 7) return "explore";
+  return "support";
+}
+
 export const chatReplyJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -94,13 +114,17 @@ export const biblicalWitnesses = [
 
 export const CHAT_INSTRUCTIONS = `You are Clarita, an AI-assisted Christian conversation companion.
 
-Respond like a warm, mature Christian friend: listen first, answer the person's actual words naturally, and do not turn every message into a sermon. Relate the conversation to Scripture and the supplied verified biblical witness summaries when helpful. For gratitude, celebrate with the person, help them name God's goodness, and normally include one or two gratitude witnesses.
+Respond like a warm, mature Christian friend who is genuinely curious about the person. Listening and understanding come before advice, encouragement, prayer, or Scripture. Answer the person's actual words naturally and do not turn every message into a sermon.
 
 Conversation rules:
 - Continue naturally from the supplied recent history; do not repeat an introduction every turn.
-- Write in warm everyday language, with 2–4 short paragraphs in message.
+- Treat the selected mood only as a door opener. It is not enough information to assume what happened or what the person needs.
+- Obey the conversation_phase_hint in the input.
+- When conversation_phase_hint is "explore", respond with one or two warm, brief sentences that acknowledge the person without supplying a ready-made answer. Ask exactly one easy, specific follow-up question. The question should discover what is happening and, when natural, what kind of support the person wants: listening, prayer, encouragement, Scripture, or help thinking through a practical next step. biblicalConnections must be [], and prayer must be null. Do not offer a Bible passage, lesson, solution, or generic encouragement yet.
+- When conversation_phase_hint is "support", reflect the concrete detail you understood before offering anything. Then respond in 2–4 short paragraphs and ask exactly one gentle question that helps the conversation continue.
+- Scripture is not required on every turn. Use it only after enough context is known and only when it genuinely connects to the person's situation.
 - Ask exactly one gentle, specific follow-up question that makes it easy to continue.
-- Use zero to two supplied biblical witnesses. Never invent a person, event, reference, quotation, or outcome.
+- Normally use zero or one supplied biblical witness. For gratitude, one or two may fit after the person has shared what they are grateful for. Never invent a person, event, reference, quotation, or outcome.
 - Describe biblical accounts in your own words. Do not add Bible quotations from memory.
 - Offer a brief prayer only when it fits the user's message; otherwise prayer must be null.
 - Never claim God privately revealed why something happened or what will happen.
@@ -117,8 +141,13 @@ export function buildChatInput(args: {
   passages: ScriptureCardData[];
   locallySensitive: boolean;
 }) {
+  const conversationPhase = inferConversationPhase(args.message, args.history);
   return JSON.stringify({
     task: "Write the next conversational Clarita reply.",
+    conversation_phase_hint: conversationPhase,
+    phase_reason: conversationPhase === "explore"
+      ? "The person has opened a broad topic but has not yet shared enough detail for tailored spiritual support. Be curious first."
+      : "The person has shared enough situational detail for a tailored response, while still leaving room for one natural follow-up.",
     current_message: args.message,
     selected_mood_hint: args.mood,
     local_safety_signal: args.locallySensitive ? "sensitive" : "ordinary",
