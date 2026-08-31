@@ -28,9 +28,9 @@ export type Database = {
         Relationships: [];
       };
       conversations: {
-        Row: { id: string; user_id: string; title: string; created_at: string; updated_at: string };
-        Insert: { id?: string; user_id: string; title: string; created_at?: string; updated_at?: string };
-        Update: { title?: string; updated_at?: string; user_id?: string };
+        Row: { id: string; user_id: string; title: string; pinned_at: string | null; archived_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; title: string; pinned_at?: string | null; archived_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { title?: string; pinned_at?: string | null; archived_at?: string | null; updated_at?: string; user_id?: string };
         Relationships: [];
       };
       conversation_messages: {

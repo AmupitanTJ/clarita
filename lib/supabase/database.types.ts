@@ -25,6 +25,18 @@ export type Database = {
         Update: { rating?: string; safety_level?: string | null; response_source?: string | null; detail?: string | null; consent_to_review?: boolean; user_id?: string | null };
         Relationships: [];
       };
+      conversations: {
+        Row: { id: string; user_id: string; title: string; pinned_at: string | null; archived_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; title: string; pinned_at?: string | null; archived_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { title?: string; pinned_at?: string | null; archived_at?: string | null; updated_at?: string; user_id?: string };
+        Relationships: [];
+      };
+      conversation_messages: {
+        Row: { id: string; conversation_id: string; role: "user" | "assistant"; content: string; response_data: Json | null; source: "generated" | "reviewed" | "safety" | null; created_at: string };
+        Insert: { id?: string; conversation_id: string; role: "user" | "assistant"; content: string; response_data?: Json | null; source?: "generated" | "reviewed" | "safety" | null; created_at?: string };
+        Update: { content?: string; response_data?: Json | null; source?: "generated" | "reviewed" | "safety" | null };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -32,3 +44,5 @@ export type Database = {
     CompositeTypes: Record<string, never>;
   };
 };
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];

@@ -1,14 +1,21 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Check, ChevronRight, History, LoaderCircle, MessageCircle, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, BookOpen, Check, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
 import type { ChatHistoryItem, ChatReply } from "@/lib/chat";
 import { createClient, type Json } from "@/lib/supabase";
 
-type Conversation = { id: string; title: string; created_at: string; updated_at: string };
+type Conversation = {
+  id: string;
+  title: string;
+  pinned_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -50,6 +57,13 @@ function makeTitle(message: string) {
   return clean.length > 62 ? `${clean.slice(0, 59)}…` : clean;
 }
 
+function sortConversations(items: Conversation[]) {
+  return [...items].sort((first, second) => {
+    if (Boolean(first.pinned_at) !== Boolean(second.pinned_at)) return first.pinned_at ? -1 : 1;
+    return second.updated_at.localeCompare(first.updated_at);
+  });
+}
+
 function assistantHistoryContent(message: Message) {
   const reply = message.reply;
   if (!reply) return message.content;
@@ -75,6 +89,11 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyView, setHistoryView] = useState<"active" | "archived">("active");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
@@ -101,7 +120,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     async function initializeHistory() {
       const { data, error } = await supabase
         .from("conversations")
-        .select("id, title, created_at, updated_at")
+        .select("id, title, pinned_at, archived_at, created_at, updated_at")
         .eq("user_id", userId as string)
         .order("updated_at", { ascending: false });
       if (cancelled) return;
@@ -109,14 +128,34 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
         onNotice("Clarita could not load your conversation history.");
         return;
       }
-      const threads = data ?? [];
+      const threads = sortConversations(data ?? []);
       setConversations(threads);
-      if (threads[0]) await openConversation(threads[0].id);
+      const firstActive = threads.find((thread) => !thread.archived_at);
+      if (firstActive) await openConversation(firstActive.id);
     }
 
     void initializeHistory();
     return () => { cancelled = true; };
   }, [onNotice, openConversation, supabase, userId]);
+
+  useEffect(() => {
+    function closeConversationMenu(event: PointerEvent) {
+      if (!(event.target instanceof Element) || !event.target.closest("[data-conversation-menu]")) {
+        setOpenMenuId(null);
+      }
+    }
+
+    function closeConversationMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenMenuId(null);
+    }
+
+    document.addEventListener("pointerdown", closeConversationMenu);
+    document.addEventListener("keydown", closeConversationMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeConversationMenu);
+      document.removeEventListener("keydown", closeConversationMenuWithKeyboard);
+    };
+  }, []);
 
   useEffect(() => {
     const stream = streamRef.current;
@@ -131,7 +170,139 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     setMessages([]);
     setDraft(seed);
     setHistoryOpen(false);
+    setHistoryView("active");
+    setOpenMenuId(null);
+    setRenamingId(null);
     setPendingDeleteId(null);
+  }
+
+  function beginRename(thread: Conversation) {
+    setRenameDraft(thread.title);
+    setRenamingId(thread.id);
+    setOpenMenuId(null);
+    setPendingDeleteId(null);
+  }
+
+  async function renameConversation(event: FormEvent, conversationId: string) {
+    event.preventDefault();
+    const title = renameDraft.replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!title || updatingId) return;
+    setUpdatingId(conversationId);
+
+    try {
+      const { data, error } = await supabase
+        .from("conversations")
+        .update({ title })
+        .eq("id", conversationId)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !data) throw error ?? new Error("Conversation was not renamed.");
+      setConversations((current) => current.map((thread) => thread.id === conversationId ? { ...thread, title } : thread));
+      setRenamingId(null);
+      onNotice("Conversation renamed.");
+    } catch {
+      onNotice("Clarita could not rename that conversation. Please try again.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function togglePin(thread: Conversation) {
+    if (updatingId) return;
+    setUpdatingId(thread.id);
+    const pinnedAt = thread.pinned_at ? null : new Date().toISOString();
+
+    try {
+      const { data, error } = await supabase
+        .from("conversations")
+        .update({ pinned_at: pinnedAt })
+        .eq("id", thread.id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !data) throw error ?? new Error("Conversation pin was not updated.");
+      setConversations((current) => sortConversations(current.map((item) => item.id === thread.id ? { ...item, pinned_at: pinnedAt } : item)));
+      setOpenMenuId(null);
+      onNotice(pinnedAt ? "Conversation pinned." : "Conversation unpinned.");
+    } catch {
+      onNotice("Clarita could not update that conversation. Please try again.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function setConversationArchived(thread: Conversation, archive: boolean) {
+    if (updatingId) return;
+    setUpdatingId(thread.id);
+    const archivedAt = archive ? new Date().toISOString() : null;
+
+    try {
+      const { data, error } = await supabase
+        .from("conversations")
+        .update({ archived_at: archivedAt })
+        .eq("id", thread.id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+      if (error || !data) throw error ?? new Error("Conversation archive was not updated.");
+
+      const updated = sortConversations(conversations.map((item) => item.id === thread.id ? { ...item, archived_at: archivedAt } : item));
+      setConversations(updated);
+      setOpenMenuId(null);
+
+      if (archive && activeId === thread.id) {
+        const nextActive = updated.find((item) => !item.archived_at);
+        if (nextActive) await openConversation(nextActive.id);
+        else startNewConversation();
+      } else if (!archive && activeId === thread.id) {
+        setHistoryView("active");
+      }
+
+      onNotice(archive ? "Conversation archived." : "Conversation restored.");
+    } catch {
+      onNotice("Clarita could not update that conversation. Please try again.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function shareConversation(thread: Conversation) {
+    setOpenMenuId(null);
+    try {
+      const { data, error } = await supabase
+        .from("conversation_messages")
+        .select("id, role, content, response_data, created_at")
+        .eq("conversation_id", thread.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const transcript = (data ?? []).map((row) => {
+        if (row.role === "user") return `You:\n${row.content}`;
+        const reply = isChatReply(row.response_data) ? (row.response_data as unknown as ChatReply) : null;
+        const biblicalConnections = reply?.biblicalConnections.map((connection) =>
+          `${connection.name} — ${connection.reference}\n${connection.testimony}\n${connection.connection}`
+        ).join("\n\n");
+        const response = reply
+          ? [reply.message, reply.scriptureTransition, biblicalConnections, reply.prayer ? `Prayer:\n${reply.prayer}` : "", reply.question]
+              .filter(Boolean)
+              .join("\n\n")
+          : row.content;
+        return `Clarita:\n${response}`;
+      }).join("\n\n———\n\n");
+
+      const shareText = `Clarita conversation: ${thread.title}\n\n${transcript}`;
+      if (navigator.share) {
+        await navigator.share({ title: `Clarita — ${thread.title}`, text: shareText });
+        onNotice("Conversation shared.");
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        onNotice("Conversation copied. You can paste it where you want to share it.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      onNotice("Clarita could not prepare that conversation for sharing.");
+    }
   }
 
   async function deleteConversation(conversationId: string) {
@@ -152,11 +323,14 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       const remaining = conversations.filter((thread) => thread.id !== conversationId);
       setConversations(remaining);
       setPendingDeleteId(null);
+      setOpenMenuId(null);
 
       if (activeId === conversationId) {
         setHistoryOpen(false);
-        if (remaining[0]) {
-          await openConversation(remaining[0].id);
+        const nextConversation = remaining.find((thread) => historyView === "archived" ? Boolean(thread.archived_at) : !thread.archived_at)
+          ?? remaining.find((thread) => !thread.archived_at);
+        if (nextConversation) {
+          await openConversation(nextConversation.id);
         } else {
           startNewConversation();
         }
@@ -184,12 +358,25 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
         const { data, error } = await supabase
           .from("conversations")
           .insert({ user_id: user.id, title: makeTitle(text) })
-          .select("id, title, created_at, updated_at")
+          .select("id, title, pinned_at, archived_at, created_at, updated_at")
           .single();
         if (error || !data) throw new Error("Conversation could not be created.");
         conversationId = data.id;
         setActiveId(data.id);
         setConversations((current) => [data, ...current]);
+      } else {
+        const currentConversation = conversations.find((thread) => thread.id === conversationId);
+        if (currentConversation?.archived_at) {
+          const { error } = await supabase
+            .from("conversations")
+            .update({ archived_at: null })
+            .eq("id", conversationId)
+            .eq("user_id", user.id);
+          if (error) throw error;
+          setConversations((current) => current.map((thread) => thread.id === conversationId ? { ...thread, archived_at: null } : thread));
+          setHistoryView("active");
+          onNotice("Conversation restored because you continued it.");
+        }
       }
 
       const now = new Date().toISOString();
@@ -233,7 +420,10 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       await supabase.from("conversations").update({ updated_at: updatedAt }).eq("id", conversationId);
       setConversations((current) => current
         .map((thread) => thread.id === conversationId ? { ...thread, updated_at: updatedAt } : thread)
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+        .sort((a, b) => {
+          if (Boolean(a.pinned_at) !== Boolean(b.pinned_at)) return a.pinned_at ? -1 : 1;
+          return b.updated_at.localeCompare(a.updated_at);
+        }));
       setMessages((current) => [...current, toMessage(savedReply)]);
     } catch (error) {
       setDraft(text);
@@ -246,6 +436,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   }
 
   const saveLabel = "Saved to your account";
+  const visibleConversations = conversations.filter((thread) => historyView === "archived" ? Boolean(thread.archived_at) : !thread.archived_at);
 
   return (
     <section className="conversation page-enter">
@@ -258,11 +449,46 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
           </span>
         </div>
         <button className="new-conversation" onClick={() => startNewConversation()}><MessageCircle size={16} /> New conversation</button>
+        <div className="conversation-list__filters" aria-label="Conversation history views">
+          <button
+            type="button"
+            className={historyView === "active" ? "active" : ""}
+            onClick={() => { setHistoryView("active"); setOpenMenuId(null); setRenamingId(null); setPendingDeleteId(null); }}
+          >
+            <MessageCircle size={13} /> Chats
+          </button>
+          <button
+            type="button"
+            className={historyView === "archived" ? "active" : ""}
+            onClick={() => { setHistoryView("archived"); setOpenMenuId(null); setRenamingId(null); setPendingDeleteId(null); }}
+          >
+            <Archive size={13} /> Archived
+          </button>
+        </div>
         <div className="conversation-list">
-          {conversations.length === 0 && <p>Your conversations will appear here and remain available for future reference.</p>}
-          {conversations.map((thread) => (
+          {visibleConversations.length === 0 && (
+            <p>{historyView === "archived" ? "Chats you archive will be kept safely here until you restore or delete them." : "Your conversations will appear here and remain available for future reference."}</p>
+          )}
+          {visibleConversations.map((thread) => (
             <div key={thread.id} className={`conversation-list__item ${activeId === thread.id ? "active" : ""}`}>
-              {pendingDeleteId === thread.id ? (
+              {renamingId === thread.id ? (
+                <form className="conversation-list__rename" onSubmit={(event) => void renameConversation(event, thread.id)}>
+                  <label htmlFor={`rename-${thread.id}`}>Rename chat</label>
+                  <input
+                    id={`rename-${thread.id}`}
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    maxLength={80}
+                    autoFocus
+                  />
+                  <div>
+                    <button type="button" onClick={() => setRenamingId(null)} disabled={updatingId === thread.id}><X size={13} /> Cancel</button>
+                    <button type="submit" disabled={!renameDraft.trim() || updatingId === thread.id}>
+                      {updatingId === thread.id ? <LoaderCircle className="spin" size={13} /> : <Check size={13} />} Save
+                    </button>
+                  </div>
+                </form>
+              ) : pendingDeleteId === thread.id ? (
                 <div className="conversation-list__confirm" role="alert">
                   <span>Delete this chat?</span>
                   <div>
@@ -283,22 +509,45 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
                   <button
                     type="button"
                     className="conversation-list__open"
-                    onClick={() => { setHistoryOpen(false); setPendingDeleteId(null); void openConversation(thread.id); }}
+                    onClick={() => { setHistoryOpen(false); setOpenMenuId(null); setPendingDeleteId(null); void openConversation(thread.id); }}
                   >
-                    <span>{thread.title}</span>
+                    <span>{thread.pinned_at && <Pin size={10} aria-label="Pinned" />}{thread.title}</span>
                     <small>{new Date(thread.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
-                    <ChevronRight size={14} />
                   </button>
-                  <button
-                    type="button"
-                    className="conversation-list__delete"
-                    onClick={() => setPendingDeleteId(thread.id)}
-                    disabled={isSending || Boolean(deletingId)}
-                    aria-label={`Delete conversation: ${thread.title}`}
-                    title="Delete conversation"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="conversation-list__actions" data-conversation-menu>
+                    <button
+                      type="button"
+                      className="conversation-list__more"
+                      onClick={() => setOpenMenuId((current) => current === thread.id ? null : thread.id)}
+                      disabled={isSending || Boolean(deletingId) || Boolean(updatingId)}
+                      aria-label={`More options for ${thread.title}`}
+                      aria-expanded={openMenuId === thread.id}
+                      aria-haspopup="menu"
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
+                    {openMenuId === thread.id && (
+                      <div className="conversation-list__menu" role="menu" aria-label={`Options for ${thread.title}`}>
+                        <button type="button" role="menuitem" onClick={() => void shareConversation(thread)}><Share2 size={15} /> Share</button>
+                        <button type="button" role="menuitem" onClick={() => beginRename(thread)}><Pencil size={15} /> Rename</button>
+                        <button type="button" role="menuitem" onClick={() => void togglePin(thread)}>
+                          {thread.pinned_at ? <PinOff size={15} /> : <Pin size={15} />}{thread.pinned_at ? "Unpin chat" : "Pin chat"}
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => void setConversationArchived(thread, !thread.archived_at)}>
+                          {thread.archived_at ? <RotateCcw size={15} /> : <Archive size={15} />}{thread.archived_at ? "Restore" : "Archive"}
+                        </button>
+                        <span className="conversation-list__menu-divider" />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => { setOpenMenuId(null); setPendingDeleteId(thread.id); }}
+                        >
+                          <Trash2 size={15} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
