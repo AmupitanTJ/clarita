@@ -10,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#FBF7EF",
     theme_color: "#285E61",
     icons: [
-      { src: "/clarita-mark.svg", sizes: "any", type: "image/svg+xml" },
+      { src: "/clarita-favicon-v2.svg", sizes: "any", type: "image/svg+xml" },
     ],
   };
 }

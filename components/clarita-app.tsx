@@ -74,6 +74,27 @@ export function ClaritaApp() {
   const turnstileRef = useRef<TurnstileInstance>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authState = query.get("auth");
+    const authError = query.get("auth_error") ?? hash.get("error_description");
+
+    if (authError || authState === "error") {
+      setDataNotice(
+        authError
+          ? authError.replace(/\+/g, " ")
+          : "That sign-in link could not be completed. Please request a new link.",
+      );
+    } else if (authState === "success") {
+      setDataNotice("You are securely signed in.");
+    }
+
+    if (authState || authError || hash.has("error")) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   const loadSaved = useCallback(async () => {
     const [passages, notes] = await Promise.all([
       supabase.from("saved_passages").select("id, reference, translation, excerpt, context_note").order("created_at", { ascending: false }),

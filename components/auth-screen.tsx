@@ -37,7 +37,7 @@ export function AuthScreen({ user, supabase, getCaptchaToken, resetCaptcha, onBa
           email: address,
           options: {
             shouldCreateUser: true,
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: new URL("/auth/callback", window.location.origin).toString(),
             captchaToken,
           },
         });

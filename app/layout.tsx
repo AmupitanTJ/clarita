@@ -12,6 +12,10 @@ export const metadata: Metadata = {
     "A gentle, Scripture-grounded companion for reflection and Bible study.",
   applicationName: "Clarita",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/clarita-favicon-v2.svg", type: "image/svg+xml" }],
+    shortcut: ["/clarita-favicon-v2.svg"],
+  },
 };
 
 export const viewport: Viewport = {
