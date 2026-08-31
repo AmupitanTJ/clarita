@@ -330,6 +330,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
         const nextConversation = remaining.find((thread) => historyView === "archived" ? Boolean(thread.archived_at) : !thread.archived_at)
           ?? remaining.find((thread) => !thread.archived_at);
         if (nextConversation) {
+          setHistoryView(nextConversation.archived_at ? "archived" : "active");
           await openConversation(nextConversation.id);
         } else {
           startNewConversation();
