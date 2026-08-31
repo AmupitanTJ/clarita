@@ -117,10 +117,10 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .scripture-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .scripture-grid:has(> :only-child) { grid-template-columns: 1fr; }
 .scripture-card { background: var(--surface); border: 1px solid var(--line); border-radius: 19px; padding: 24px; box-shadow: 0 12px 35px rgba(23,35,59,.06); align-self: start; }
-.scripture-card__topline { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.scripture-card__topline { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .verified-label { display: flex; align-items: center; gap: 3px; color: var(--olive); }
-.scripture-card__reference { font-size: 12px; font-weight: 600; color: var(--teal); margin: 18px 0 12px; }
-.scripture-card blockquote { font-family: var(--serif); font-size: 21px; line-height: 1.55; margin: 0 0 20px; }
+.scripture-card__reference { font-size: 14px; font-weight: 600; color: var(--teal); margin: 18px 0 12px; }
+.scripture-card blockquote { font-family: var(--serif); font-size: 22px; line-height: 1.58; margin: 0 0 20px; }
 .context-toggle { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 15px 0 0; background: none; display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; cursor: pointer; }
 .rotated { transform: rotate(180deg); }
 .context-panel { margin-top: 14px; background: var(--ivory); padding: 15px; border-radius: 12px; animation: enter .25s ease; }
@@ -171,10 +171,21 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .new-conversation { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--teal); color: white; padding: 11px 13px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .conversation-list { display: grid; gap: 4px; margin-top: 18px; }
 .conversation-list > p { color: var(--muted); font-size: 11px; line-height: 1.65; padding: 8px; }
-.conversation-list > button { width: 100%; min-width: 0; border: 0; background: transparent; border-radius: 11px; padding: 11px 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; color: var(--muted); text-align: left; cursor: pointer; }
-.conversation-list > button:hover, .conversation-list > button.active { background: var(--mist); color: var(--teal-dark); }
-.conversation-list > button span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
-.conversation-list > button small { font-size: 8px; opacity: .75; }
+.conversation-list__item { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; border-radius: 11px; color: var(--muted); }
+.conversation-list__item:hover, .conversation-list__item:focus-within, .conversation-list__item.active { background: var(--mist); color: var(--teal-dark); }
+.conversation-list__open { width: 100%; min-width: 0; border: 0; background: transparent; padding: 11px 5px 11px 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; color: inherit; text-align: left; cursor: pointer; }
+.conversation-list__open span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
+.conversation-list__open small { font-size: 8px; opacity: .75; }
+.conversation-list__delete { width: 28px; height: 28px; border: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--rose); cursor: pointer; opacity: .58; transition: opacity .16s ease, background .16s ease; }
+.conversation-list__item:hover .conversation-list__delete, .conversation-list__delete:focus-visible { opacity: 1; }
+.conversation-list__delete:hover { background: color-mix(in srgb, var(--rose) 12%, transparent); }
+.conversation-list__delete:disabled { cursor: default; opacity: .35; }
+.conversation-list__confirm { grid-column: 1 / -1; padding: 10px; display: grid; gap: 8px; color: var(--ink); font-size: 11px; }
+.conversation-list__confirm > span { font-weight: 600; }
+.conversation-list__confirm > div { display: flex; gap: 6px; }
+.conversation-list__confirm button { min-height: 30px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--surface); color: var(--muted); font-size: 10px; cursor: pointer; }
+.conversation-list__confirm .conversation-list__confirm-delete { border-color: color-mix(in srgb, var(--rose) 35%, var(--line)); color: var(--rose); }
+.conversation-list__confirm button:disabled { cursor: wait; opacity: .58; }
 .conversation__main { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 76px); height: calc(100dvh - 76px); overflow: hidden; }
 .conversation__header { border-bottom: 1px solid var(--line); padding: 13px clamp(16px, 4vw, 42px); display: flex; align-items: center; justify-content: space-between; background: var(--surface-soft); }
 .conversation__header > div { display: flex; align-items: center; gap: 10px; }
@@ -203,14 +214,14 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .biblical-connection { margin-top: 14px; border: 1px solid rgba(40,94,97,.17); border-radius: 15px; padding: 16px; background: color-mix(in srgb, var(--mist) 46%, var(--surface)); }
 .biblical-connection > div { display: flex; align-items: center; gap: 9px; color: var(--teal); }
 .biblical-connection > div > span, .biblical-connection strong, .biblical-connection small { display: block; }
-.biblical-connection strong { font-family: var(--serif); font-size: 15px; font-weight: 500; }
-.biblical-connection small { color: var(--muted); font-size: 8px; margin-top: 2px; }
-.biblical-connection p { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.biblical-connection strong { font-family: var(--serif); font-size: 18px; font-weight: 500; line-height: 1.35; }
+.biblical-connection small { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 3px; }
+.biblical-connection p { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.75; }
 .biblical-connection p:last-child { color: var(--ink); }
 .chat-prayer { margin-top: 15px; border-left: 2px solid var(--gold); padding: 8px 0 8px 15px; }
 .chat-prayer span { color: var(--gold); font-size: 9px; text-transform: uppercase; letter-spacing: .09em; }
-.chat-prayer p { font-family: var(--serif); font-size: 14px; line-height: 1.65; margin: 6px 0 0; }
-.chat-question { margin: 18px 0 0; color: var(--teal-dark); font-weight: 600; font-size: 13px; line-height: 1.6; }
+.chat-prayer p { font-family: var(--serif); font-size: 16px; line-height: 1.7; margin: 6px 0 0; }
+.chat-question { margin: 18px 0 0; color: var(--teal-dark); font-weight: 600; font-size: 15px; line-height: 1.65; }
 .chat-source { display: block; margin-top: 15px; color: var(--muted); font-size: 8px; }
 .assistant-thinking { max-width: 760px; margin: 0 auto 24px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .assistant-thinking .brand__mark { width: 28px; height: 28px; animation: breathe 1.5s ease-in-out infinite; }
@@ -232,9 +243,9 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .empty-state p { color: var(--muted); font-size: 13px; max-width: 430px; line-height: 1.6; margin: 0 auto 24px; }
 .saved-list { display: grid; gap: 14px; margin-top: 42px; }
 .saved-item { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px; }
-.saved-item > span { color: var(--teal); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
+.saved-item > span { color: var(--teal); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
 .saved-item h2 { font-family: var(--serif); font-size: 25px; font-weight: 400; margin: 9px 0 12px; }
-.saved-item blockquote { font-family: var(--serif); font-size: 19px; line-height: 1.55; margin: 0 0 14px; }
+.saved-item blockquote { font-family: var(--serif); font-size: 20px; line-height: 1.6; margin: 0 0 14px; }
 .saved-item p, .saved-item blockquote { overflow-wrap: anywhere; }
 .saved-item p { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 0; }
 .saved-item--note { background: var(--lavender-light); }

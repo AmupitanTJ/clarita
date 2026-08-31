@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Check, ChevronRight, History, LoaderCircle, MessageCircle, Plus, Send, Sparkles, X } from "lucide-react";
+import { BookOpen, Check, ChevronRight, History, LoaderCircle, MessageCircle, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
@@ -58,6 +58,8 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const userId = user?.id;
@@ -112,6 +114,43 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     setMessages([]);
     setDraft(seed);
     setHistoryOpen(false);
+    setPendingDeleteId(null);
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (isSending || deletingId) return;
+    setDeletingId(conversationId);
+
+    try {
+      const { data: deletedConversation, error } = await supabase
+        .from("conversations")
+        .delete()
+        .eq("id", conversationId)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (error || !deletedConversation) throw error ?? new Error("Conversation was not deleted.");
+
+      const remaining = conversations.filter((thread) => thread.id !== conversationId);
+      setConversations(remaining);
+      setPendingDeleteId(null);
+
+      if (activeId === conversationId) {
+        setHistoryOpen(false);
+        if (remaining[0]) {
+          await openConversation(remaining[0].id);
+        } else {
+          startNewConversation();
+        }
+      }
+
+      onNotice("Conversation deleted.");
+    } catch {
+      onNotice("Clarita could not delete that conversation. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -207,11 +246,47 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
         <div className="conversation-list">
           {conversations.length === 0 && <p>Your conversations will appear here and remain available for future reference.</p>}
           {conversations.map((thread) => (
-            <button key={thread.id} className={activeId === thread.id ? "active" : ""} onClick={() => { setHistoryOpen(false); void openConversation(thread.id); }}>
-              <span>{thread.title}</span>
-              <small>{new Date(thread.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
-              <ChevronRight size={14} />
-            </button>
+            <div key={thread.id} className={`conversation-list__item ${activeId === thread.id ? "active" : ""}`}>
+              {pendingDeleteId === thread.id ? (
+                <div className="conversation-list__confirm" role="alert">
+                  <span>Delete this chat?</span>
+                  <div>
+                    <button type="button" onClick={() => setPendingDeleteId(null)} disabled={deletingId === thread.id}>Cancel</button>
+                    <button
+                      type="button"
+                      className="conversation-list__confirm-delete"
+                      onClick={() => void deleteConversation(thread.id)}
+                      disabled={deletingId === thread.id}
+                    >
+                      {deletingId === thread.id ? <LoaderCircle className="spin" size={13} /> : <Trash2 size={13} />}
+                      {deletingId === thread.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="conversation-list__open"
+                    onClick={() => { setHistoryOpen(false); setPendingDeleteId(null); void openConversation(thread.id); }}
+                  >
+                    <span>{thread.title}</span>
+                    <small>{new Date(thread.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="conversation-list__delete"
+                    onClick={() => setPendingDeleteId(thread.id)}
+                    disabled={isSending || Boolean(deletingId)}
+                    aria-label={`Delete conversation: ${thread.title}`}
+                    title="Delete conversation"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              )}
+            </div>
           ))}
         </div>
       </aside>
