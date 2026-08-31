@@ -24,6 +24,7 @@ function extractOutputText(payload: unknown): string | undefined {
 function gratitudeFallback(message: string): ChatReply {
   return {
     message: `That is beautiful to hear. Gratitude can be a way of slowing down long enough to recognise that a good gift is not ordinary or owed to us. Your words—“${message.slice(0, 180)}”—can become a simple testimony of God’s kindness.`,
+    scriptureTransition: "What you have shared brings two very different expressions of gratitude to mind. Let’s look at how Hannah and the man who returned to Jesus allowed thankfulness to become worship and testimony.",
     biblicalConnections: [
       {
         name: "Hannah",
@@ -76,6 +77,7 @@ function exploratoryFallback(message: string, mood: MoodId, history: ChatHistory
     message: isFollowUp
       ? "Thank you—that gives me a clearer place to stay with you. We can take this one step at a time."
       : openings[mood],
+    scriptureTransition: "",
     biblicalConnections: [],
     question: isFollowUp ? followUpQuestions[mood] : questions[mood],
     prayer: null,
@@ -88,15 +90,49 @@ function reviewedFallback(message: string, mood: MoodId, history: ChatHistoryIte
   if (inferConversationPhase(message, history) === "explore") return exploratoryFallback(message, mood, history);
   if (/\b(grateful|thankful|thank\s+god|blessed|gratitude)\b/i.test(message) || mood === "grateful") return gratitudeFallback(message);
   const reviewed = getReviewedResponse(mood, message);
+  const messageExcerpt = message.replace(/\s+/g, " ").trim().slice(0, 220);
+  const supportMessages: Record<MoodId, string> = {
+    worried: `I’m listening to the concern underneath what you said: “${messageExcerpt}”. It makes sense that uncertainty would keep pulling at your attention. We do not have to rush past it or pretend it is smaller than it feels.`,
+    sad: `Thank you for putting this into words: “${messageExcerpt}”. There is no need to tidy up the sadness before bringing it here. We can stay with what hurts and take it one part at a time.`,
+    lonely: `I hear the loneliness in what you shared: “${messageExcerpt}”. Wanting to be known and accompanied is not a weakness. I would rather understand where the ache is strongest than cover it with a quick answer.`,
+    grateful: `There is real gratitude in what you shared: “${messageExcerpt}”. Let’s slow down long enough to notice why this gift matters and what it is showing you about God’s care.`,
+    direction: `I hear that this is not merely a theoretical decision: “${messageExcerpt}”. When the outcome matters, uncertainty can feel exhausting. We can separate what is clear, what is still unknown, and what a faithful next step might be.`,
+    faith: `Thank you for trusting me with this honest faith question: “${messageExcerpt}”. You do not need to perform certainty here. We can examine the question carefully while making room for both conviction and uncertainty.`,
+  };
+  const scriptureTransitions: Record<MoodId, string> = {
+    worried: "What you are carrying deserves more than a quick instruction not to worry. Let’s see how Jesus and Paul spoke about trust while addressing people whose pressures were real.",
+    sad: "Scripture does not ask us to skip over sorrow. Let’s spend a moment with a psalm that holds grief and hope in the same honest prayer.",
+    lonely: "The Bible meets loneliness by first affirming that being unseen by people does not make someone unseen by God. David’s prayer in Psalm 139 gives us a gentle place to begin.",
+    grateful: "Let’s see how Scripture turns a grateful moment into deliberate remembrance of God’s goodness.",
+    direction: "Rather than forcing a quick answer, let’s look at how James speaks about seeking wisdom while walking through real pressure.",
+    faith: "The Bible makes room for faith and uncertainty to be spoken in the same breath. This encounter in Mark shows us what that kind of honesty can look like.",
+  };
+  const scriptureCardNames: Record<MoodId, string[]> = {
+    worried: ["Jesus on today’s cares", "Paul writing under pressure"],
+    sad: ["A psalm that makes room for sorrow"],
+    lonely: ["David’s prayer of being fully known"],
+    grateful: ["A psalm of deliberate remembrance"],
+    direction: ["James on asking God for wisdom"],
+    faith: ["An honest request brought to Jesus"],
+  };
+  const supportQuestions: Record<MoodId, string> = {
+    worried: "Would it help most to tell me what outcome you fear, pray about it together, or think through one practical next step?",
+    sad: "Would you like to tell me more about the part that hurts most, receive some encouragement, or have me pray with you?",
+    lonely: "What kind of presence would help most right now—more space to talk, prayer, encouragement, or help reaching toward someone safe?",
+    grateful: "What part of this gift or answered prayer do you most want to remember and thank God for?",
+    direction: "Would you like to unpack the choices and consequences, pray for wisdom, or explore another biblical example of guidance?",
+    faith: "Which would serve you best next—examining the question further, exploring more Scripture, or putting the uncertainty into prayer?",
+  };
   return {
-    message: `${reviewed.acknowledgement} ${reviewed.reflection}`,
-    biblicalConnections: reviewed.passages.slice(0, 1).map((passage) => ({
-      name: "A passage to sit with",
+    message: supportMessages[mood],
+    scriptureTransition: scriptureTransitions[mood],
+    biblicalConnections: reviewed.passages.slice(0, 2).map((passage, index) => ({
+      name: scriptureCardNames[mood][index] ?? "A biblical perspective",
       reference: passage.reference,
       testimony: passage.context,
       connection: passage.relevance,
     })),
-    question: reviewed.question,
+    question: supportQuestions[mood],
     prayer: reviewed.prayer,
     safetyLevel: classifyLocally(message) === "sensitive" ? "sensitive" : "ordinary",
     source: "reviewed",
@@ -132,6 +168,7 @@ export async function POST(request: Request) {
   if (safety === "emergency") {
     return Response.json({
       message: "I’m really sorry you’re facing this. Your immediate safety matters more than continuing a long conversation here. Please move away from anything you could use to hurt yourself or someone else and contact a trusted person who can stay with you now.",
+      scriptureTransition: "",
       biblicalConnections: [],
       question: "Can you call Nigeria’s emergency number 112 now, or ask someone nearby to call and stay with you?",
       prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. Amen.",

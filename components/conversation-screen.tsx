@@ -50,6 +50,23 @@ function makeTitle(message: string) {
   return clean.length > 62 ? `${clean.slice(0, 59)}…` : clean;
 }
 
+function assistantHistoryContent(message: Message) {
+  const reply = message.reply;
+  if (!reply) return message.content;
+
+  const discussedScripture = reply.biblicalConnections
+    .map((connection) => `${connection.name} (${connection.reference}): ${connection.connection}`)
+    .join("\n");
+
+  return [
+    reply.message,
+    reply.scriptureTransition,
+    discussedScripture ? `Scripture already discussed:\n${discussedScripture}` : "",
+    reply.prayer ? `Prayer offered: ${reply.prayer}` : "",
+    `Follow-up question: ${reply.question}`,
+  ].filter(Boolean).join("\n\n");
+}
+
 export function ConversationScreen({ mood, user, supabase, onNotice }: ConversationScreenProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -189,9 +206,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
 
       const history: ChatHistoryItem[] = priorMessages.slice(-10).map((item) => ({
         role: item.role,
-        content: item.role === "assistant" && item.reply?.question
-          ? `${item.content}\nFollow-up question: ${item.reply.question}`
-          : item.content,
+        content: item.role === "assistant" ? assistantHistoryContent(item) : item.content,
       }));
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -352,6 +367,7 @@ function ConversationMessage({ message }: { message: Message }) {
     <article className="chat-message chat-message--assistant">
       <div className="chat-message__identity"><BrandMark compact /><span>Clarita</span></div>
       <p className="chat-message__body">{reply?.message ?? message.content}</p>
+      {reply?.scriptureTransition && <p className="scripture-transition">{reply.scriptureTransition}</p>}
       {reply?.biblicalConnections.map((connection) => (
         <div className="biblical-connection" key={`${connection.name}-${connection.reference}`}>
           <div><BookOpen size={15} /><span><strong>{connection.name}</strong><small>{connection.reference}</small></span></div>

@@ -211,6 +211,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .chat-message__identity { display: flex; align-items: center; gap: 7px; color: var(--teal); font-size: 11px; font-weight: 600; }
 .chat-message__identity .brand__mark { width: 28px; height: 28px; }
 .chat-message__body { font-family: var(--serif); font-size: 18px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.scripture-transition { margin: 18px 0 4px; color: var(--ink); font-size: 15px; line-height: 1.75; font-weight: 500; white-space: pre-wrap; }
 .biblical-connection { margin-top: 14px; border: 1px solid rgba(40,94,97,.17); border-radius: 15px; padding: 16px; background: color-mix(in srgb, var(--mist) 46%, var(--surface)); }
 .biblical-connection > div { display: flex; align-items: center; gap: 9px; color: var(--teal); }
 .biblical-connection > div > span, .biblical-connection strong, .biblical-connection small { display: block; }
@@ -389,6 +390,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
   .chat-message { margin-bottom: 16px; }
   .chat-message--assistant { padding: 18px 15px; border-radius: 18px 18px 18px 5px; }
   .chat-message__body { font-size: 16px; }
+  .scripture-transition { font-size: 14px; line-height: 1.7; }
   .chat-message--user > p { max-width: 92%; font-size: 12px; }
   .conversation-composer { margin: 0 clamp(10px, 3vw, 24px) 10px; padding: 10px 50px 22px 13px; border-radius: 17px; }
   .conversation-composer textarea { min-height: 49px; font-size: 16px; }
