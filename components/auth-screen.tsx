@@ -11,11 +11,14 @@ type AuthScreenProps = {
   supabase: ReturnType<typeof createClient>;
   getCaptchaToken: () => Promise<string | undefined>;
   resetCaptcha: () => void;
+  captchaStatus: "loading" | "ready" | "verifying" | "verified" | "error" | "not-required";
   onBack: () => void;
   onNotice: (message: string | null) => void;
 };
 
-export function AuthScreen({ user, supabase, getCaptchaToken, resetCaptcha, onBack, onNotice }: AuthScreenProps) {
+export const captchaWaitMessage = "Please wait a moment while Clarita verifies the security check, then try again.";
+
+export function AuthScreen({ user, supabase, getCaptchaToken, resetCaptcha, captchaStatus, onBack, onNotice }: AuthScreenProps) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -47,7 +50,11 @@ export function AuthScreen({ user, supabase, getCaptchaToken, resetCaptcha, onBa
       setSent(true);
       onNotice("Your secure Clarita sign-in link is on its way.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Clarita could not send the sign-in link. Please try again.");
+      if (error instanceof Error && error.message === captchaWaitMessage) {
+        onNotice(null);
+      } else {
+        onNotice(error instanceof Error ? error.message : "Clarita could not send the sign-in link. Please try again.");
+      }
     } finally {
       resetCaptcha();
       setBusy(false);
@@ -83,7 +90,17 @@ export function AuthScreen({ user, supabase, getCaptchaToken, resetCaptcha, onBa
             <form onSubmit={submit}>
               <label htmlFor="auth-email">Email address</label>
               <div className="auth-email-field"><Mail size={18} /><input id="auth-email" type="email" autoComplete="email" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required autoFocus /></div>
-              <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Sending secure link…" : <>Continue with email <ArrowRight size={17} /></>}</button>
+              {!isGuest && captchaStatus !== "not-required" && (
+                <p className={`auth-captcha-status is-${captchaStatus}`} role="status" aria-live="polite">
+                  <span aria-hidden="true" />
+                  {captchaStatus === "loading" && "Please wait—Clarita is loading the security check."}
+                  {captchaStatus === "ready" && "Security check ready. You can continue."}
+                  {captchaStatus === "verifying" && "Please wait while Clarita verifies the security check…"}
+                  {captchaStatus === "verified" && "Security check completed."}
+                  {captchaStatus === "error" && "The security check needs another moment. Please wait, then try again."}
+                </p>
+              )}
+              <button className="auth-submit" type="submit" disabled={busy || captchaStatus === "loading" || captchaStatus === "verifying"}>{busy ? "Verifying and sending…" : <>Continue with email <ArrowRight size={17} /></>}</button>
             </form>
             <small className="auth-fineprint"><ShieldCheck size={14} /> No password needed. We email you a secure, one-time sign-in link.</small>
           </>

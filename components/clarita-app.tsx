@@ -19,7 +19,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
-import { AuthScreen } from "@/components/auth-screen";
+import { AuthScreen, captchaWaitMessage } from "@/components/auth-screen";
 import { ConversationScreen } from "@/components/conversation-screen";
 import { moods, type MoodId } from "@/data/clarita-content";
 import { createClient } from "@/lib/supabase";
@@ -73,6 +73,9 @@ export function ClaritaApp() {
   const supabase = useMemo(() => createClient(), []);
   const turnstileRef = useRef<TurnstileInstance>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const [captchaStatus, setCaptchaStatus] = useState<"loading" | "ready" | "verifying" | "verified" | "error" | "not-required">(
+    turnstileSiteKey ? "loading" : "not-required",
+  );
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -123,12 +126,18 @@ export function ClaritaApp() {
   const getCaptchaToken = useCallback(async () => {
     let captchaToken: string | undefined;
     if (turnstileSiteKey) {
+      setCaptchaStatus("verifying");
       try {
         captchaToken = await turnstileRef.current?.getResponsePromise(20_000);
       } catch {
-        throw new Error("Clarita's security check could not load. Please refresh or disable content blockers and try again.");
+        setCaptchaStatus("error");
+        throw new Error(captchaWaitMessage);
       }
-      if (!captchaToken) throw new Error("Clarita's security check could not load. Please refresh and try again.");
+      if (!captchaToken) {
+        setCaptchaStatus("error");
+        throw new Error(captchaWaitMessage);
+      }
+      setCaptchaStatus("verified");
     }
 
     return captchaToken;
@@ -184,7 +193,7 @@ export function ClaritaApp() {
 
       <main>
         {screen === "welcome" && <WelcomeScreen onTalk={openTalk} />}
-        {screen === "auth" && <AuthScreen user={user} supabase={supabase} getCaptchaToken={getCaptchaToken} resetCaptcha={() => turnstileRef.current?.reset()} onBack={() => setScreen("welcome")} onNotice={setDataNotice} />}
+        {screen === "auth" && <AuthScreen user={user} supabase={supabase} getCaptchaToken={getCaptchaToken} resetCaptcha={() => { turnstileRef.current?.reset(); setCaptchaStatus(turnstileSiteKey ? "ready" : "not-required"); }} captchaStatus={captchaStatus} onBack={() => setScreen("welcome")} onNotice={setDataNotice} />}
         {screen === "talk" && user?.is_anonymous === false && <ConversationScreen mood={mood} user={user} supabase={supabase} onNotice={setDataNotice} />}
         {screen === "saved" && user?.is_anonymous === false && <SavedScreen saved={savedPassages} notes={savedNotes} onRemovePassage={removeSavedPassage} onRemoveNote={removeSavedNote} onExplore={() => openTalk()} />}
         {screen === "settings" && user?.is_anonymous === false && <SettingsScreen user={user} supabase={supabase} onNotice={setDataNotice} theme={theme} onTheme={setActiveTheme} onSignedOut={() => setScreen("welcome")} />}
@@ -196,7 +205,13 @@ export function ClaritaApp() {
             ref={turnstileRef}
             siteKey={turnstileSiteKey}
             options={{ appearance: "interaction-only", size: "flexible", theme, refreshExpired: "auto" }}
-            onError={() => setDataNotice("Clarita could not complete the security check. Please try again.")}
+            onWidgetLoad={() => setCaptchaStatus("ready")}
+            onBeforeInteractive={() => setCaptchaStatus("verifying")}
+            onSuccess={() => setCaptchaStatus("verified")}
+            onExpire={() => setCaptchaStatus("ready")}
+            onError={() => setCaptchaStatus("error")}
+            onTimeout={() => setCaptchaStatus("error")}
+            onUnsupported={() => setCaptchaStatus("error")}
           />
         </div>
       )}
