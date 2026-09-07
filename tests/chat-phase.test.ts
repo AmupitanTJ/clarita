@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inferConversationPhase, type ChatHistoryItem } from "../lib/chat.ts";
+import { buildChatInput, inferConversationIntent, inferConversationPhase, type ChatHistoryItem } from "../lib/chat.ts";
 
 const noHistory: ChatHistoryItem[] = [];
 
@@ -22,4 +22,28 @@ test("continues with support after a detailed earlier disclosure", () => {
     { role: "assistant", content: "Thank you for explaining that tension. Which part feels hardest?" },
   ];
   assert.equal(inferConversationPhase("The thought of being alone", history), "support");
+});
+
+test("recognises a clear request to pray without asking permission again", () => {
+  assert.equal(inferConversationIntent("Yes please, let's pray together"), "pray");
+  assert.equal(inferConversationIntent("okay lets pray together"), "pray");
+  assert.equal(inferConversationIntent("Can you pray for me?"), "pray");
+  assert.equal(inferConversationIntent("I would like us to pray"), "pray");
+});
+
+test("keeps listening when the person chooses to talk more", () => {
+  assert.equal(inferConversationIntent("I would like to keep talking about this"), "talk_more");
+  assert.equal(inferConversationIntent("I am not ready to pray, please listen to me"), "talk_more");
+});
+
+test("passes an explicit prayer choice to the model even when the message is brief", () => {
+  const input = JSON.parse(buildChatInput({
+    message: "Let's pray",
+    mood: "worried",
+    history: [],
+    passages: [],
+    locallySensitive: false,
+  })) as { user_intent_hint: string; conversation_phase_hint: string };
+  assert.equal(input.user_intent_hint, "pray");
+  assert.equal(input.conversation_phase_hint, "explore");
 });

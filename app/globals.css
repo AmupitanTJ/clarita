@@ -242,6 +242,11 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .chat-prayer span { color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: .09em; }
 .chat-prayer p { font-family: var(--serif); font-size: 16px; line-height: 1.7; margin: 6px 0 0; }
 .chat-question { margin: 18px 0 0; color: var(--teal-dark); font-weight: 600; font-size: 15px; line-height: 1.65; }
+.suggested-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.suggested-actions button { min-height: 42px; border: 1px solid color-mix(in srgb, var(--teal) 35%, var(--line)); border-radius: 999px; padding: 9px 15px; background: color-mix(in srgb, var(--teal) 8%, var(--surface)); color: var(--teal-dark); font-size: 12px; font-weight: 700; cursor: pointer; }
+.suggested-actions button:first-child { background: var(--teal); color: white; }
+.suggested-actions button:hover, .suggested-actions button:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 16%, transparent); }
+.suggested-actions button:disabled { cursor: wait; opacity: .5; }
 .chat-source { display: block; margin-top: 15px; color: var(--muted); font-size: 10px; }
 .message-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .message-actions button, .message-actions > span { min-height: 38px; border: 0; border-radius: 999px; padding: 8px 10px; display: inline-flex; align-items: center; gap: 5px; background: transparent; color: var(--muted); font-size: 11px; }

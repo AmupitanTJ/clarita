@@ -3,6 +3,7 @@ import {
   buildChatInput,
   CHAT_INSTRUCTIONS,
   chatReplyJsonSchema,
+  inferConversationIntent,
   inferConversationPhase,
   type ChatHistoryItem,
   type ChatReply,
@@ -73,6 +74,7 @@ function emergencyReply(): ChatReply {
     safetyLevel: "emergency",
     source: "safety",
     supportNote: "Clarita is not an emergency service. If you are in Nigeria, call 112 or go to the nearest emergency department. If you are elsewhere, contact your local emergency number now.",
+    suggestedActions: [],
   };
 }
 
@@ -105,6 +107,31 @@ function gratitudeFallback(message: string): ChatReply {
     prayer: "God, thank you for the goodness I can see today. Keep me attentive to your mercy and help my gratitude become generosity, worship, and faithful living. Amen.",
     safetyLevel: "ordinary",
     source: "reviewed",
+    suggestedActions: [{ id: "talk_more", label: "Tell you more" }, { id: "pray", label: "Pray together" }],
+  };
+}
+
+function prayerFallback(mood: MoodId, history: ChatHistoryItem[]): ChatReply {
+  const priorConcern = [...history].reverse().find((item) => item.role === "user")?.content.trim();
+  const subjects: Record<MoodId, string> = {
+    worried: "the worry, uncertainty, and outcome they are carrying",
+    sad: "the hurt and heaviness they are carrying",
+    lonely: "their loneliness and need for faithful companionship",
+    grateful: "their gratitude and the goodness they have recognised",
+    direction: "the decision before them and their need for wisdom",
+    faith: "their honest questions and desire to trust you",
+  };
+  const context = priorConcern ? "You know the whole situation they have shared, including the parts that are difficult to put into words." : "You know what is on their heart, even where words feel incomplete.";
+
+  return {
+    message: "Yes—let’s pray together now. You can read this slowly, make the words your own, or simply let me pray alongside you.",
+    scriptureTransition: "",
+    biblicalConnections: [],
+    prayer: `Father, ${context} Please meet them in ${subjects[mood]}. Give them steadiness for today, wisdom for the next step, and people who will support them well. Help them remember that they do not need to hide fear or weakness from you. Hold what they cannot control, guide what they can do, and give them rest as they place this before you. In Jesus’ name, amen.`,
+    question: "Is there anything else you would like us to bring before God while we are here?",
+    safetyLevel: "ordinary",
+    source: "reviewed",
+    suggestedActions: [{ id: "talk_more", label: "Share something else" }],
   };
 }
 
@@ -145,10 +172,14 @@ function exploratoryFallback(message: string, mood: MoodId, history: ChatHistory
     prayer: null,
     safetyLevel: "ordinary",
     source: "reviewed",
+    suggestedActions: mood === "grateful"
+      ? [{ id: "talk_more", label: "Tell you what happened" }, { id: "pray", label: "Pray with gratitude" }]
+      : [{ id: "talk_more", label: "Keep talking" }, { id: "pray", label: "Pray together" }],
   };
 }
 
 function reviewedFallback(message: string, mood: MoodId, history: ChatHistoryItem[]): ChatReply {
+  if (inferConversationIntent(message) === "pray") return prayerFallback(mood, history);
   if (inferConversationPhase(message, history) === "explore") return exploratoryFallback(message, mood, history);
   if (/\b(grateful|thankful|thank\s+god|blessed|gratitude)\b/i.test(message) || mood === "grateful") return gratitudeFallback(message);
   const reviewed = getReviewedResponse(mood, message);
@@ -198,6 +229,7 @@ function reviewedFallback(message: string, mood: MoodId, history: ChatHistoryIte
     prayer: reviewed.prayer,
     safetyLevel: classifyLocally(message) === "sensitive" ? "sensitive" : "ordinary",
     source: "reviewed",
+    suggestedActions: [{ id: "talk_more", label: "Keep talking" }, { id: "pray", label: "Pray together" }],
   };
 }
 

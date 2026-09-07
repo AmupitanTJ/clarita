@@ -7,6 +7,13 @@ export type BiblicalConnection = {
   connection: string;
 };
 
+export type SuggestedActionId = "pray" | "talk_more" | "encouragement" | "scripture" | "practical_steps";
+
+export type SuggestedAction = {
+  id: SuggestedActionId;
+  label: string;
+};
+
 export type ChatReply = {
   message: string;
   scriptureTransition: string;
@@ -16,15 +23,25 @@ export type ChatReply = {
   safetyLevel: "ordinary" | "sensitive" | "emergency";
   source: "generated" | "reviewed" | "safety";
   supportNote?: string;
+  suggestedActions?: SuggestedAction[];
 };
 
 export type ChatHistoryItem = { role: "user" | "assistant"; content: string };
 
 export type ConversationPhase = "explore" | "support";
+export type ConversationIntent = "pray" | "talk_more" | "general";
 
 const broadOpeners = /\b(i need (?:some )?(?:guidance|direction|help|advice)|guide me|help me|i(?:'m| am) (?:worried|sad|lonely|confused|lost|stuck|struggling)|i don(?:'t|’t) know what to do|what should i do)\b/i;
 const lifeAreas = /\b(work|job|career|business|school|study|marriage|relationship|family|parent|child|friend|church|faith|ministry|money|finance|health|grief|loss|decision|calling|future)\b/i;
 const situationDetails = /\b(because|since|after|before|when|whether|between|happened|offered|said|did|can(?:'t|not)|could(?:'t| not)|want to|trying to|deciding|considering)\b/i;
+const prayerIntent = /\b(let(?:'s|s| us) pray|pray (?:with|for) me|pray together|please pray|can we pray|i(?:'d| would) like (?:us )?to pray|yes[,\s]+(?:please[,\s]+)?(?:let(?:'s|s| us) )?pray)\b/i;
+const talkMoreIntent = /\b(keep talking|talk more|i want to talk|let me explain|listen to me|hear me out|not ready to pray)\b/i;
+
+export function inferConversationIntent(message: string): ConversationIntent {
+  if (talkMoreIntent.test(message)) return "talk_more";
+  if (prayerIntent.test(message)) return "pray";
+  return "general";
+}
 
 export function inferConversationPhase(message: string, history: ChatHistoryItem[]): ConversationPhase {
   const clean = message.replace(/\s+/g, " ").trim();
@@ -43,7 +60,7 @@ export function inferConversationPhase(message: string, history: ChatHistoryItem
 export const chatReplyJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["message", "scriptureTransition", "biblicalConnections", "question", "prayer", "safetyLevel"],
+  required: ["message", "scriptureTransition", "biblicalConnections", "question", "prayer", "safetyLevel", "suggestedActions"],
   properties: {
     message: { type: "string", minLength: 1, maxLength: 1400 },
     scriptureTransition: { type: "string", maxLength: 500 },
@@ -66,6 +83,20 @@ export const chatReplyJsonSchema = {
     question: { type: "string", minLength: 1, maxLength: 320 },
     prayer: { anyOf: [{ type: "string", minLength: 1, maxLength: 700 }, { type: "null" }] },
     safetyLevel: { type: "string", enum: ["ordinary", "sensitive"] },
+    suggestedActions: {
+      type: "array",
+      minItems: 0,
+      maxItems: 3,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "label"],
+        properties: {
+          id: { type: "string", enum: ["pray", "talk_more", "encouragement", "scripture", "practical_steps"] },
+          label: { type: "string", minLength: 1, maxLength: 32 },
+        },
+      },
+    },
   },
 } as const;
 
@@ -122,8 +153,9 @@ Conversation rules:
 - Continue naturally from the supplied recent history; do not repeat an introduction every turn.
 - Respond to the person before reaching for a passage. The reply should feel like a caring conversation that happens to be grounded in Christian faith, not a Bible-reference generator.
 - Treat the selected mood only as a door opener. It is not enough information to assume what happened or what the person needs.
+- Obey user_intent_hint first; an explicit prayer or keep-talking choice overrides the normal conversation-phase behavior below.
 - Obey the conversation_phase_hint in the input.
-- When conversation_phase_hint is "explore", respond with one or two warm, brief sentences that acknowledge the person without supplying a ready-made answer. Ask exactly one easy, specific follow-up question. The question should discover what is happening and, when natural, what kind of support the person wants: listening, prayer, encouragement, Scripture, or help thinking through a practical next step. scriptureTransition must be "", biblicalConnections must be [], and prayer must be null. Do not offer a Bible passage, lesson, solution, or generic encouragement yet.
+- When conversation_phase_hint is "explore" and user_intent_hint is "general", respond with one or two warm, brief sentences that acknowledge the person without supplying a ready-made answer. Ask exactly one easy, specific follow-up question. The question should discover what is happening and, when natural, what kind of support the person wants: listening, prayer, encouragement, Scripture, or help thinking through a practical next step. scriptureTransition must be "", biblicalConnections must be [], and prayer must be null. Do not offer a Bible passage, lesson, solution, or generic encouragement yet.
 - When conversation_phase_hint is "support", first reflect the concrete detail and emotion you understood. Respond in 2–4 short paragraphs before any Scripture material, without pretending to know more than the person shared.
 - Scripture is not required on every turn. Use it only after enough context is known and only when it genuinely connects to the person's situation.
 - When biblicalConnections is not empty, scriptureTransition must be a natural one- or two-sentence bridge from the person's story into the passages. It may say, for example, that their experience brings a particular biblical person or book to mind, but it must be freshly worded for this situation. Do not reuse a stock transition such as "A passage to sit with" or abruptly announce a reference.
@@ -133,6 +165,9 @@ Conversation rules:
 - Use only the supplied verified_passages and verified_biblical_witnesses. Never invent a person, event, reference, quotation, or outcome. Describe biblical accounts in your own words and do not add Bible quotations from memory.
 - If recent_conversation identifies Scripture already discussed, choose a different relevant passage unless the person asks to revisit it or a genuinely new connection makes repetition useful.
 - Ask exactly one warm, specific, open question that proves you listened and makes it easy to continue. Where useful, let the person choose whether they want to talk more, pray together, receive encouragement, explore more Scripture, or think through a practical next step.
+- suggestedActions is a short list of 0–3 buttons that directly match the choices offered in the question. Use stable ids and brief labels such as "Pray together" or "Keep talking". Do not add a button for an option the reply did not actually offer.
+- Treat an explicit choice as an instruction to act, not another opportunity to ask permission. If user_intent_hint is "pray", begin a sincere, situation-specific prayer in this reply. Do not ask whether, how, or if the person wants to pray. After the prayer, the one question may gently ask whether there is anything else to bring before God or what part they want to stay with. Do not offer a second "Pray together" button.
+- If user_intent_hint is "talk_more", invite and listen for more detail. Do not introduce Scripture or prayer unless the person separately asks for it.
 - Never write as if the exchange is finished. Leave room for the person's own words, questions, pace, and preferred kind of support.
 - Offer a brief prayer only when it fits the user's message; otherwise prayer must be null.
 - Never claim God privately revealed why something happened or what will happen.
@@ -150,9 +185,11 @@ export function buildChatInput(args: {
   locallySensitive: boolean;
 }) {
   const conversationPhase = inferConversationPhase(args.message, args.history);
+  const conversationIntent = inferConversationIntent(args.message);
   return JSON.stringify({
     task: "Write the next conversational Clarita reply.",
     conversation_phase_hint: conversationPhase,
+    user_intent_hint: conversationIntent,
     phase_reason: conversationPhase === "explore"
       ? "The person has opened a broad topic but has not yet shared enough detail for tailored spiritual support. Be curious first."
       : "The person has shared enough situational detail for a tailored response, while still leaving room for one natural follow-up.",

@@ -5,7 +5,7 @@ import { Archive, BookOpen, Check, Clipboard, Flag, History, LoaderCircle, Messa
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
-import type { ChatHistoryItem, ChatReply } from "@/lib/chat";
+import type { ChatHistoryItem, ChatReply, SuggestedAction, SuggestedActionId } from "@/lib/chat";
 import { createClient, type Json } from "@/lib/supabase";
 
 type Conversation = {
@@ -94,6 +94,30 @@ function assistantHistoryContent(message: Message) {
     reply.prayer ? `Prayer offered: ${reply.prayer}` : "",
     `Follow-up question: ${reply.question}`,
   ].filter(Boolean).join("\n\n");
+}
+
+const suggestedActionPrompts: Record<SuggestedActionId, string> = {
+  pray: "Yes, let’s pray together now.",
+  talk_more: "I would like to keep talking about this.",
+  encouragement: "I would like some encouragement.",
+  scripture: "I would like to explore more Scripture about this.",
+  practical_steps: "Please help me think through a practical next step.",
+};
+const validSuggestedActionIds = new Set<SuggestedActionId>(Object.keys(suggestedActionPrompts) as SuggestedActionId[]);
+
+function actionsForReply(reply: ChatReply | null): SuggestedAction[] {
+  if (!reply) return [];
+  if (reply.suggestedActions?.length) {
+    return reply.suggestedActions
+      .filter((action) => validSuggestedActionIds.has(action.id) && typeof action.label === "string" && action.label.trim().length > 0)
+      .slice(0, 3);
+  }
+  const question = reply.question.toLowerCase();
+  const actions: SuggestedAction[] = [];
+  if (/pray|prayer/.test(question)) actions.push({ id: "pray", label: "Pray together" });
+  if (/talk|share|tell me|listen/.test(question)) actions.push({ id: "talk_more", label: "Keep talking" });
+  if (/encourag|comfort/.test(question)) actions.push({ id: "encouragement", label: "Encourage me" });
+  return actions.slice(0, 3);
 }
 
 export function ConversationScreen({ mood, user, supabase, historyEnabled, onNotice }: ConversationScreenProps) {
@@ -443,9 +467,8 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
     }
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const text = draft.trim();
+  async function sendMessage(rawText: string) {
+    const text = rawText.trim();
     if (!text || isSending) return;
     setDraft("");
     setIsSending(true);
@@ -515,6 +538,11 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
     } finally {
       setIsSending(false);
     }
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void sendMessage(draft);
   }
 
   const saveLabel = historyEnabled ? "Saved to your account" : "Temporary chat · not saved";
@@ -687,7 +715,16 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
             </div>
           ) : (
             messages.map((message) => (
-              <ConversationMessage key={message.id} message={message} user={user} supabase={supabase} onNotice={onNotice} />
+              <ConversationMessage
+                key={message.id}
+                message={message}
+                user={user}
+                supabase={supabase}
+                onNotice={onNotice}
+                isLatest={message.id === messages.at(-1)?.id}
+                actionDisabled={isSending}
+                onSuggestedAction={(action) => void sendMessage(suggestedActionPrompts[action])}
+              />
             ))
           )}
           {isSending && <div className="assistant-thinking"><BrandMark compact /><span>Clarita is listening and reflecting…</span></div>}
@@ -728,9 +765,12 @@ type ConversationMessageProps = {
   user: User;
   supabase: ReturnType<typeof createClient>;
   onNotice: (message: string | null) => void;
+  isLatest: boolean;
+  actionDisabled: boolean;
+  onSuggestedAction: (action: SuggestedActionId) => void;
 };
 
-function ConversationMessage({ message, user, supabase, onNotice }: ConversationMessageProps) {
+function ConversationMessage({ message, user, supabase, onNotice, isLatest, actionDisabled, onSuggestedAction }: ConversationMessageProps) {
   const [feedback, setFeedback] = useState<"helpful" | "not_helpful" | "concern" | null>(null);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -796,6 +836,15 @@ function ConversationMessage({ message, user, supabase, onNotice }: Conversation
       {reply?.prayer && <div className="chat-prayer"><span>A prayer you can make your own</span><p>{reply.prayer}</p></div>}
       {reply?.supportNote && <p className="emergency-notice">{reply.supportNote}</p>}
       {reply?.question && <p className="chat-question">{reply.question}</p>}
+      {isLatest && actionsForReply(reply).length > 0 && (
+        <div className="suggested-actions" aria-label="Choose how to continue">
+          {actionsForReply(reply).map((action) => (
+            <button key={action.id} type="button" onClick={() => onSuggestedAction(action.id)} disabled={actionDisabled}>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
       {reply && <small className="chat-source">{reply.source === "generated" ? "AI-assisted response" : reply.source === "safety" ? "Safety response" : "Reviewed response"}</small>}
       <div className="message-actions" aria-label="Response actions">
         <button type="button" onClick={() => void copyResponse()}><Clipboard size={14} /> Copy</button>
