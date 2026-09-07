@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Archive, BookOpen, Check, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
@@ -28,8 +28,23 @@ type ConversationScreenProps = {
   mood: MoodId;
   user: User;
   supabase: ReturnType<typeof createClient>;
+  historyEnabled: boolean;
   onNotice: (message: string | null) => void;
 };
+
+function subscribeToMobileHistory(callback: () => void) {
+  const query = window.matchMedia("(max-width: 760px)");
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function readMobileHistory() {
+  return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function readServerMobileHistory() {
+  return false;
+}
 
 function isChatReply(value: Json | null): value is Json & ChatReply {
   if (!value || Array.isArray(value) || typeof value !== "object") return false;
@@ -81,12 +96,13 @@ function assistantHistoryContent(message: Message) {
   ].filter(Boolean).join("\n\n");
 }
 
-export function ConversationScreen({ mood, user, supabase, onNotice }: ConversationScreenProps) {
+export function ConversationScreen({ mood, user, supabase, historyEnabled, onNotice }: ConversationScreenProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [replyFailure, setReplyFailure] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyView, setHistoryView] = useState<"active" | "archived">("active");
@@ -98,10 +114,13 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const historyCloseRef = useRef<HTMLButtonElement>(null);
+  const isMobileHistory = useSyncExternalStore(subscribeToMobileHistory, readMobileHistory, readServerMobileHistory);
   const userId = user?.id;
 
   const openConversation = useCallback(async (conversationId: string) => {
     setActiveId(conversationId);
+    setReplyFailure(null);
     setIsLoadingHistory(true);
     const { data, error } = await supabase
       .from("conversation_messages")
@@ -110,11 +129,13 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       .order("created_at", { ascending: true });
     setIsLoadingHistory(false);
     if (error) return onNotice("Clarita could not open that conversation.");
-    setMessages((data ?? []).map(toMessage));
+    const loadedMessages = (data ?? []).map(toMessage);
+    setMessages(loadedMessages);
+    setReplyFailure(loadedMessages.at(-1)?.role === "user" ? "Your message is saved, but Clarita has not answered it yet." : null);
   }, [onNotice, supabase]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !historyEnabled) return;
     let cancelled = false;
 
     async function initializeHistory() {
@@ -136,7 +157,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
 
     void initializeHistory();
     return () => { cancelled = true; };
-  }, [onNotice, openConversation, supabase, userId]);
+  }, [historyEnabled, onNotice, openConversation, supabase, userId]);
 
   useEffect(() => {
     function closeConversationMenu(event: PointerEvent) {
@@ -146,7 +167,10 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     }
 
     function closeConversationMenuWithKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpenMenuId(null);
+      if (event.key === "Escape") {
+        setOpenMenuId(null);
+        setHistoryOpen(false);
+      }
     }
 
     document.addEventListener("pointerdown", closeConversationMenu);
@@ -156,6 +180,10 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       document.removeEventListener("keydown", closeConversationMenuWithKeyboard);
     };
   }, []);
+
+  useEffect(() => {
+    if (historyOpen && isMobileHistory) historyCloseRef.current?.focus();
+  }, [historyOpen, isMobileHistory]);
 
   useEffect(() => {
     const stream = streamRef.current;
@@ -169,6 +197,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     setActiveId(null);
     setMessages([]);
     setDraft(seed);
+    setReplyFailure(null);
     setHistoryOpen(false);
     setHistoryView("active");
     setOpenMenuId(null);
@@ -345,17 +374,89 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
     }
   }
 
+  async function requestAssistantReply(conversationId: string | null, text: string, priorMessages: Message[]) {
+    const history: ChatHistoryItem[] = priorMessages.slice(-10).map((item) => ({
+      role: item.role,
+      content: item.role === "assistant" ? assistantHistoryContent(item) : item.content,
+    }));
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, mood, history }),
+    });
+    if (!response.ok) {
+      const failure = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(failure?.error ?? "Clarita could not reply.");
+    }
+    const reply = (await response.json()) as ChatReply;
+
+    if (!historyEnabled || !conversationId) {
+      setMessages((current) => [...current, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: reply.message,
+        reply,
+        createdAt: new Date().toISOString(),
+      }]);
+      setReplyFailure(null);
+      return;
+    }
+
+    const { data: savedReply, error: replyError } = await supabase
+      .from("conversation_messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: reply.message,
+        response_data: reply as unknown as Json,
+        source: reply.source,
+      })
+      .select("id, role, content, response_data, created_at")
+      .single();
+    if (replyError || !savedReply) throw replyError ?? new Error("Reply could not be saved.");
+
+    const updatedAt = new Date().toISOString();
+    await supabase.from("conversations").update({ updated_at: updatedAt }).eq("id", conversationId).eq("user_id", user.id);
+    setConversations((current) => current
+      .map((thread) => thread.id === conversationId ? { ...thread, updated_at: updatedAt } : thread)
+      .sort((a, b) => {
+        if (Boolean(a.pinned_at) !== Boolean(b.pinned_at)) return a.pinned_at ? -1 : 1;
+        return b.updated_at.localeCompare(a.updated_at);
+      }));
+    setMessages((current) => [...current, toMessage(savedReply)]);
+    setReplyFailure(null);
+  }
+
+  async function retryLastReply() {
+    if ((!activeId && historyEnabled) || isSending) return;
+    const lastMessage = messages.at(-1);
+    if (!lastMessage || lastMessage.role !== "user") return;
+
+    setIsSending(true);
+    setReplyFailure(null);
+    try {
+      await requestAssistantReply(activeId, lastMessage.content, messages.slice(0, -1));
+    } catch (error) {
+      setReplyFailure(error instanceof Error ? error.message : "Clarita could not answer yet. Please try again.");
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
     if (!text || isSending) return;
     setDraft("");
     setIsSending(true);
+    setReplyFailure(null);
+    let userMessageSaved = false;
+    let optimisticId: string | null = null;
 
     try {
       let conversationId = activeId;
 
-      if (!conversationId) {
+      if (historyEnabled && !conversationId) {
         const { data, error } = await supabase
           .from("conversations")
           .insert({ user_id: user.id, title: makeTitle(text) })
@@ -365,7 +466,7 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
         conversationId = data.id;
         setActiveId(data.id);
         setConversations((current) => [data, ...current]);
-      } else {
+      } else if (historyEnabled && conversationId) {
         const currentConversation = conversations.find((thread) => thread.id === conversationId);
         if (currentConversation?.archived_at) {
           const { error } = await supabase
@@ -381,72 +482,66 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
       }
 
       const now = new Date().toISOString();
-      const optimisticUser: Message = { id: crypto.randomUUID(), role: "user", content: text, reply: null, createdAt: now };
+      optimisticId = crypto.randomUUID();
+      const optimisticUser: Message = { id: optimisticId, role: "user", content: text, reply: null, createdAt: now };
       const priorMessages = messages;
       setMessages((current) => [...current, optimisticUser]);
 
-      const { error: userMessageError } = await supabase.from("conversation_messages").insert({
-        conversation_id: conversationId,
-        role: "user",
-        content: text,
-      });
-      if (userMessageError) throw userMessageError;
+      if (historyEnabled && conversationId) {
+        const { data: savedUser, error: userMessageError } = await supabase
+          .from("conversation_messages")
+          .insert({
+            conversation_id: conversationId,
+            role: "user",
+            content: text,
+          })
+          .select("id, role, content, response_data, created_at")
+          .single();
+        if (userMessageError || !savedUser) throw userMessageError ?? new Error("Message could not be saved.");
+        setMessages((current) => current.map((item) => item.id === optimisticId ? toMessage(savedUser) : item));
+      }
+      userMessageSaved = true;
 
-      const history: ChatHistoryItem[] = priorMessages.slice(-10).map((item) => ({
-        role: item.role,
-        content: item.role === "assistant" ? assistantHistoryContent(item) : item.content,
-      }));
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, mood, history }),
-      });
-      if (!response.ok) throw new Error("Clarita could not reply.");
-      const reply = (await response.json()) as ChatReply;
-
-      const { data: savedReply, error: replyError } = await supabase
-        .from("conversation_messages")
-        .insert({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: reply.message,
-          response_data: reply as unknown as Json,
-          source: reply.source,
-        })
-        .select("id, role, content, response_data, created_at")
-        .single();
-      if (replyError || !savedReply) throw replyError ?? new Error("Reply could not be saved.");
-
-      const updatedAt = new Date().toISOString();
-      await supabase.from("conversations").update({ updated_at: updatedAt }).eq("id", conversationId);
-      setConversations((current) => current
-        .map((thread) => thread.id === conversationId ? { ...thread, updated_at: updatedAt } : thread)
-        .sort((a, b) => {
-          if (Boolean(a.pinned_at) !== Boolean(b.pinned_at)) return a.pinned_at ? -1 : 1;
-          return b.updated_at.localeCompare(a.updated_at);
-        }));
-      setMessages((current) => [...current, toMessage(savedReply)]);
+      await requestAssistantReply(conversationId, text, priorMessages);
     } catch (error) {
-      setDraft(text);
-      onNotice(error instanceof Error && error.message.includes("security check")
-        ? error.message
-        : "Clarita could not save or answer that message. Please try again.");
+      const message = error instanceof Error ? error.message : "Clarita could not answer yet. Please try again.";
+      if (userMessageSaved) {
+        setReplyFailure(message);
+      } else {
+        if (optimisticId) setMessages((current) => current.filter((item) => item.id !== optimisticId));
+        setDraft(text);
+        onNotice("Clarita could not save that message. Please try again.");
+      }
     } finally {
       setIsSending(false);
     }
   }
 
-  const saveLabel = "Saved to your account";
+  const saveLabel = historyEnabled ? "Saved to your account" : "Temporary chat · not saved";
   const visibleConversations = conversations.filter((thread) => historyView === "archived" ? Boolean(thread.archived_at) : !thread.archived_at);
 
   return (
-    <section className="conversation page-enter">
-      <aside className={`conversation__sidebar ${historyOpen ? "is-open" : ""}`}>
+    <section className={`conversation page-enter ${historyEnabled ? "" : "conversation--temporary"}`}>
+      {historyEnabled && historyOpen && isMobileHistory && (
+        <button
+          type="button"
+          className="conversation__backdrop"
+          aria-label="Close conversation history"
+          onClick={() => setHistoryOpen(false)}
+        />
+      )}
+      {historyEnabled && (
+      <aside
+        id="conversation-history"
+        className={`conversation__sidebar ${historyOpen ? "is-open" : ""}`}
+        aria-hidden={isMobileHistory && !historyOpen}
+        inert={isMobileHistory && !historyOpen}
+      >
         <div className="conversation__sidebar-heading">
           <span><History size={16} /> Conversations</span>
           <span className="conversation__sidebar-actions">
             <button onClick={() => startNewConversation()} aria-label="Start a new conversation"><Plus size={17} /></button>
-            <button className="mobile-history-close" onClick={() => setHistoryOpen(false)} aria-label="Close conversation history"><X size={17} /></button>
+            <button ref={historyCloseRef} className="mobile-history-close" onClick={() => setHistoryOpen(false)} aria-label="Close conversation history"><X size={17} /></button>
           </span>
         </div>
         <button className="new-conversation" onClick={() => startNewConversation()}><MessageCircle size={16} /> New conversation</button>
@@ -555,12 +650,22 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
           ))}
         </div>
       </aside>
+      )}
 
       <div className="conversation__main">
         <header className="conversation__header">
           <div><BrandMark compact /><span><strong>Talk with Clarita</strong><small><Check size={12} /> {saveLabel}</small></span></div>
           <div className="conversation__header-actions">
-            <button className="mobile-history-toggle" onClick={() => setHistoryOpen(true)}><History size={15} /> History</button>
+            {historyEnabled && (
+              <button
+                className="mobile-history-toggle"
+                onClick={() => setHistoryOpen(true)}
+                aria-controls="conversation-history"
+                aria-expanded={historyOpen}
+              >
+                <History size={15} /> History
+              </button>
+            )}
             <button onClick={() => startNewConversation()}><Plus size={15} /> New</button>
           </div>
         </header>
@@ -584,6 +689,12 @@ export function ConversationScreen({ mood, user, supabase, onNotice }: Conversat
             messages.map((message) => <ConversationMessage key={message.id} message={message} />)
           )}
           {isSending && <div className="assistant-thinking"><BrandMark compact /><span>Clarita is listening and reflecting…</span></div>}
+          {!isSending && replyFailure && (
+            <div className="reply-recovery" role="status">
+              <span>{replyFailure}</span>
+              <button type="button" onClick={() => void retryLastReply()}>Try the response again</button>
+            </div>
+          )}
         </div>
 
         <form className="conversation-composer" onSubmit={submit}>

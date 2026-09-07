@@ -37,6 +37,12 @@ export type Database = {
         Update: { content?: string; response_data?: Json | null; source?: "generated" | "reviewed" | "safety" | null };
         Relationships: [];
       };
+      ai_request_usage: {
+        Row: { id: number; user_id: string; created_at: string };
+        Insert: { id?: never; user_id: string; created_at?: never };
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

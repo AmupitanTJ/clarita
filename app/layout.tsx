@@ -33,7 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{const saved=localStorage.getItem("clarita-theme");const theme=saved==="dark"||saved==="light"?saved:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}catch{}`,
+            __html: `try{const saved=localStorage.getItem("clarita-theme");const theme=saved==="dark"||saved==="light"?saved:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;document.documentElement.dataset.textSize=localStorage.getItem("clarita-text-size")==="large"?"large":"standard";document.documentElement.dataset.motion=localStorage.getItem("clarita-motion")==="reduced"||matchMedia("(prefers-reduced-motion: reduce)").matches?"reduced":"gentle"}catch{}`,
           }}
         />
       </head>

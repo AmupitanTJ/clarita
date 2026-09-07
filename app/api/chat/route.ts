@@ -13,6 +13,68 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const validMoods = new Set(moods.map((mood) => mood.id));
+const perMinuteLimit = 8;
+const perDayLimit = 150;
+
+async function consumeQuota(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { error: insertError } = await supabase.from("ai_request_usage").insert({ user_id: userId });
+  if (insertError) throw new Error("Usage protection is temporarily unavailable.");
+
+  const now = Date.now();
+  const [minute, day] = await Promise.all([
+    supabase
+      .from("ai_request_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", new Date(now - 60_000).toISOString()),
+    supabase
+      .from("ai_request_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", new Date(now - 86_400_000).toISOString()),
+  ]);
+
+  if (minute.error || day.error) throw new Error("Usage protection is temporarily unavailable.");
+  if ((minute.count ?? 0) > perMinuteLimit) return { allowed: false, retryAfter: 60 };
+  if ((day.count ?? 0) > perDayLimit) return { allowed: false, retryAfter: 3600 };
+  return { allowed: true, retryAfter: 0 };
+}
+
+async function moderateText(apiKey: string, text: string) {
+  const response = await fetch("https://api.openai.com/v1/moderations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "omni-moderation-latest", input: text }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) return { flagged: false, immediateRisk: false };
+  const body = (await response.json()) as {
+    results?: Array<{ flagged?: boolean; categories?: Record<string, boolean> }>;
+  };
+  const result = body.results?.[0];
+  const categories = result?.categories ?? {};
+  return {
+    flagged: result?.flagged === true,
+    immediateRisk:
+      categories["self-harm/intent"] === true ||
+      categories["self-harm/instructions"] === true ||
+      categories["violence"] === true ||
+      categories["violence/graphic"] === true,
+  };
+}
+
+function emergencyReply(): ChatReply {
+  return {
+    message: "I’m really sorry you’re facing this. Your immediate safety matters more than continuing a long conversation here. Please move away from anything you could use to hurt yourself or someone else and contact a trusted person who can stay with you now.",
+    scriptureTransition: "",
+    biblicalConnections: [],
+    question: "Can you call your local emergency number now, or ask someone nearby to call and stay with you?",
+    prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. Amen.",
+    safetyLevel: "emergency",
+    source: "safety",
+    supportNote: "Clarita is not an emergency service. If you are in Nigeria, call 112 or go to the nearest emergency department. If you are elsewhere, contact your local emergency number now.",
+  };
+}
 
 function extractOutputText(payload: unknown): string | undefined {
   if (!payload || typeof payload !== "object") return undefined;
@@ -166,16 +228,7 @@ export async function POST(request: Request) {
 
   const safety = classifyLocally(message);
   if (safety === "emergency") {
-    return Response.json({
-      message: "I’m really sorry you’re facing this. Your immediate safety matters more than continuing a long conversation here. Please move away from anything you could use to hurt yourself or someone else and contact a trusted person who can stay with you now.",
-      scriptureTransition: "",
-      biblicalConnections: [],
-      question: "Can you call Nigeria’s emergency number 112 now, or ask someone nearby to call and stay with you?",
-      prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. Amen.",
-      safetyLevel: "emergency",
-      source: "safety",
-      supportNote: "Clarita is not an emergency service. In Nigeria, call 112 or go to the nearest emergency department. If you are elsewhere, contact your local emergency number.",
-    } satisfies ChatReply);
+    return Response.json(emergencyReply());
   }
 
   const reviewed = getReviewedResponse(mood, message);
@@ -183,6 +236,17 @@ export async function POST(request: Request) {
   if (!apiKey) return Response.json(reviewedFallback(message, mood, history));
 
   try {
+    const quota = await consumeQuota(supabase, user.id);
+    if (!quota.allowed) {
+      return Response.json(
+        { error: "Clarita needs a short pause before another response. Please try again soon.", code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": String(quota.retryAfter) } },
+      );
+    }
+
+    const inputModeration = await moderateText(apiKey, message);
+    if (inputModeration.immediateRisk) return Response.json(emergencyReply());
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -190,7 +254,7 @@ export async function POST(request: Request) {
         model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
         store: false,
         instructions: CHAT_INSTRUCTIONS,
-        input: buildChatInput({ message, mood, history, passages: reviewed.passages, locallySensitive: safety === "sensitive" }),
+        input: buildChatInput({ message, mood, history, passages: reviewed.passages, locallySensitive: safety === "sensitive" || inputModeration.flagged }),
         text: { format: { type: "json_schema", name: "clarita_chat_reply", strict: true, schema: chatReplyJsonSchema } },
       }),
       signal: AbortSignal.timeout(30_000),
@@ -199,6 +263,14 @@ export async function POST(request: Request) {
     const outputText = extractOutputText(await response.json());
     if (!outputText) throw new Error("Responses API returned no output text");
     const reply = JSON.parse(outputText) as Omit<ChatReply, "source">;
+    const outputModeration = await moderateText(
+      apiKey,
+      [reply.message, reply.scriptureTransition, reply.question, reply.prayer ?? ""].filter(Boolean).join("\n\n"),
+    );
+    if (outputModeration.flagged) {
+      console.error("Clarita replaced a flagged generated response");
+      return Response.json(reviewedFallback(message, mood, history));
+    }
     return Response.json({ ...reply, source: "generated" } satisfies ChatReply);
   } catch (error) {
     console.error("Clarita chat fell back to reviewed content", error instanceof Error ? error.message : "unknown error");
