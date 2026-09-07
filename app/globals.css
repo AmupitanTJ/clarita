@@ -243,6 +243,19 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .chat-prayer p { font-family: var(--serif); font-size: 16px; line-height: 1.7; margin: 6px 0 0; }
 .chat-question { margin: 18px 0 0; color: var(--teal-dark); font-weight: 600; font-size: 15px; line-height: 1.65; }
 .chat-source { display: block; margin-top: 15px; color: var(--muted); font-size: 10px; }
+.message-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.message-actions button, .message-actions > span { min-height: 38px; border: 0; border-radius: 999px; padding: 8px 10px; display: inline-flex; align-items: center; gap: 5px; background: transparent; color: var(--muted); font-size: 11px; }
+.message-actions button { cursor: pointer; }
+.message-actions button:hover, .message-actions button:focus-visible { background: var(--mist); color: var(--teal-dark); }
+.message-actions button:disabled { cursor: wait; opacity: .55; }
+.message-actions > span { color: var(--olive); }
+.message-report { margin-top: 10px; padding: 14px; border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--gold) 7%, var(--surface)); }
+.message-report label { display: block; margin-bottom: 7px; color: var(--ink); font-size: 12px; font-weight: 700; }
+.message-report textarea { width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; }
+.message-report > div { margin-top: 8px; display: flex; justify-content: flex-end; gap: 7px; }
+.message-report button { min-height: 38px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.message-report button[type="submit"] { border-color: var(--teal); background: var(--teal); color: white; }
+.message-report button:disabled { cursor: wait; opacity: .5; }
 .assistant-thinking { max-width: 760px; margin: 0 auto 24px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .reply-recovery { max-width: 760px; margin: 0 auto 22px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); border-radius: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: color-mix(in srgb, var(--gold) 8%, var(--surface)); color: var(--muted); font-size: 13px; }
 .reply-recovery button { min-height: 40px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; background: var(--surface); color: var(--teal); font-weight: 700; cursor: pointer; }

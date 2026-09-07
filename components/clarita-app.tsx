@@ -367,6 +367,7 @@ function SettingsScreen({ user, supabase, onNotice, theme, onTheme, motion, onMo
   const [accountBusy, setAccountBusy] = useState(false);
   const [openPanel, setOpenPanel] = useState<"accessibility" | "privacy" | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [accountDeleteConfirmation, setAccountDeleteConfirmation] = useState("");
 
   async function toggleHistory() {
     setAccountBusy(true);
@@ -450,6 +451,23 @@ function SettingsScreen({ user, supabase, onNotice, theme, onTheme, motion, onMo
     }
   }
 
+  async function deleteAccount() {
+    if (accountDeleteConfirmation !== "DELETE MY ACCOUNT") return;
+    setAccountBusy(true);
+    try {
+      const { error } = await supabase.rpc("delete_my_clarita_account");
+      if (error) throw error;
+      await supabase.auth.signOut().catch(() => undefined);
+      setAccountDeleteConfirmation("");
+      onSignedOut();
+      onNotice("Your Clarita account and saved data have been permanently deleted.");
+    } catch {
+      onNotice("Clarita could not delete your account. Your data has not been intentionally changed; please try again.");
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
   async function signOut() {
     setAccountBusy(true);
     try {
@@ -496,6 +514,13 @@ function SettingsScreen({ user, supabase, onNotice, theme, onTheme, motion, onMo
             <label htmlFor="delete-data-confirmation">Type DELETE to confirm</label>
             <input id="delete-data-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" />
             <button type="button" onClick={() => void deleteSavedData()} disabled={deleteConfirmation !== "DELETE" || accountBusy}><Trash2 size={16} /> Delete saved data</button>
+          </div>
+          <div className="settings-danger settings-danger--account">
+            <strong>Delete my account</strong>
+            <p>This permanently removes your sign-in account and all Clarita data. This cannot be undone.</p>
+            <label htmlFor="delete-account-confirmation">Type DELETE MY ACCOUNT to confirm</label>
+            <input id="delete-account-confirmation" value={accountDeleteConfirmation} onChange={(event) => setAccountDeleteConfirmation(event.target.value)} autoComplete="off" />
+            <button type="button" onClick={() => void deleteAccount()} disabled={accountDeleteConfirmation !== "DELETE MY ACCOUNT" || accountBusy}><Trash2 size={16} /> Delete my account</button>
           </div>
         </section>
       )}

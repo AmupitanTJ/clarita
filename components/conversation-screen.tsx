@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Archive, BookOpen, Check, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, BookOpen, Check, Clipboard, Flag, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
@@ -686,7 +686,9 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
               </div>
             </div>
           ) : (
-            messages.map((message) => <ConversationMessage key={message.id} message={message} />)
+            messages.map((message) => (
+              <ConversationMessage key={message.id} message={message} user={user} supabase={supabase} onNotice={onNotice} />
+            ))
           )}
           {isSending && <div className="assistant-thinking"><BrandMark compact /><span>Clarita is listening and reflecting…</span></div>}
           {!isSending && replyFailure && (
@@ -721,7 +723,62 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
   );
 }
 
-function ConversationMessage({ message }: { message: Message }) {
+type ConversationMessageProps = {
+  message: Message;
+  user: User;
+  supabase: ReturnType<typeof createClient>;
+  onNotice: (message: string | null) => void;
+};
+
+function ConversationMessage({ message, user, supabase, onNotice }: ConversationMessageProps) {
+  const [feedback, setFeedback] = useState<"helpful" | "not_helpful" | "concern" | null>(null);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportDetail, setReportDetail] = useState("");
+
+  async function copyResponse() {
+    const reply = message.reply;
+    const text = reply
+      ? [
+          reply.message,
+          reply.scriptureTransition,
+          ...reply.biblicalConnections.map((connection) => `${connection.name} — ${connection.reference}\n${connection.testimony}\n${connection.connection}`),
+          reply.prayer ? `Prayer\n${reply.prayer}` : "",
+          reply.question,
+        ].filter(Boolean).join("\n\n")
+      : message.content;
+    try {
+      await navigator.clipboard.writeText(text);
+      onNotice("Clarita’s response was copied.");
+    } catch {
+      onNotice("Your browser could not copy that response.");
+    }
+  }
+
+  async function submitFeedback(rating: "helpful" | "not_helpful" | "concern", detail: string | null = null) {
+    if (feedbackBusy || feedback) return;
+    setFeedbackBusy(true);
+    try {
+      const { error } = await supabase.from("response_feedback").insert({
+        user_id: user.id,
+        rating,
+        safety_level: message.reply?.safetyLevel ?? null,
+        response_source: message.reply?.source ?? null,
+        detail,
+        consent_to_review: rating === "concern",
+      });
+      if (error) throw error;
+      setFeedback(rating);
+      setReportOpen(false);
+      setReportDetail("");
+      onNotice(rating === "concern" ? "Thank you. Your concern was recorded for review." : "Thank you for helping Clarita improve.");
+    } catch {
+      onNotice("Clarita could not save that feedback. Please try again.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
+
   if (message.role === "user") return <article className="chat-message chat-message--user"><p>{message.content}</p></article>;
   const reply = message.reply;
   return (
@@ -740,6 +797,34 @@ function ConversationMessage({ message }: { message: Message }) {
       {reply?.supportNote && <p className="emergency-notice">{reply.supportNote}</p>}
       {reply?.question && <p className="chat-question">{reply.question}</p>}
       {reply && <small className="chat-source">{reply.source === "generated" ? "AI-assisted response" : reply.source === "safety" ? "Safety response" : "Reviewed response"}</small>}
+      <div className="message-actions" aria-label="Response actions">
+        <button type="button" onClick={() => void copyResponse()}><Clipboard size={14} /> Copy</button>
+        {feedback ? (
+          <span role="status"><Check size={14} /> Feedback sent</span>
+        ) : (
+          <>
+            <button type="button" onClick={() => void submitFeedback("helpful")} disabled={feedbackBusy}><ThumbsUp size={14} /> Helpful</button>
+            <button type="button" onClick={() => void submitFeedback("not_helpful")} disabled={feedbackBusy}><ThumbsDown size={14} /> Not helpful</button>
+            <button type="button" onClick={() => setReportOpen((current) => !current)} aria-expanded={reportOpen} disabled={feedbackBusy}><Flag size={14} /> Report concern</button>
+          </>
+        )}
+      </div>
+      {reportOpen && !feedback && (
+        <form
+          className="message-report"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitFeedback("concern", reportDetail.trim());
+          }}
+        >
+          <label htmlFor={`report-${message.id}`}>What felt concerning or unsafe?</label>
+          <textarea id={`report-${message.id}`} value={reportDetail} onChange={(event) => setReportDetail(event.target.value)} maxLength={1000} rows={3} required />
+          <div>
+            <button type="button" onClick={() => { setReportOpen(false); setReportDetail(""); }}>Cancel</button>
+            <button type="submit" disabled={!reportDetail.trim() || feedbackBusy}>{feedbackBusy ? "Sending…" : "Send concern"}</button>
+          </div>
+        </form>
+      )}
     </article>
   );
 }
