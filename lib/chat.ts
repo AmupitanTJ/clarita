@@ -28,6 +28,20 @@ export type ChatReply = {
 
 export type ChatHistoryItem = { role: "user" | "assistant"; content: string };
 
+export const REQUIRED_PRAYER_ENDING = "we ask and pray in the name of Jesus the Christ, Amen";
+
+export function ensurePrayerEnding(prayer: string | null): string | null {
+  if (!prayer?.trim()) return null;
+  const withoutClosing = prayer
+    .trim()
+    .replace(/\s*we ask and pray in the name of Jesus the Christ, Amen[.!]?\s*$/i, "")
+    .replace(/\s*(?:(?:(?:in|through) (?:the )?name of (?:Jesus(?: Christ)?|Christ)|in Jesus(?:'|’|s)? name)[,\s]*)?amen[.!]?\s*$/i, "")
+    .trim();
+  if (!withoutClosing) return REQUIRED_PRAYER_ENDING;
+  const separator = /[.!?]$/.test(withoutClosing) ? " " : ". ";
+  return `${withoutClosing}${separator}${REQUIRED_PRAYER_ENDING}`;
+}
+
 export type ConversationPhase = "explore" | "support";
 export type ConversationIntent = "pray" | "talk_more" | "general";
 
@@ -170,6 +184,7 @@ Conversation rules:
 - If user_intent_hint is "talk_more", invite and listen for more detail. Do not introduce Scripture or prayer unless the person separately asks for it.
 - Never write as if the exchange is finished. Leave room for the person's own words, questions, pace, and preferred kind of support.
 - Offer a brief prayer only when it fits the user's message; otherwise prayer must be null.
+- Every non-null prayer must end with this exact closing, word for word: "we ask and pray in the name of Jesus the Christ, Amen".
 - Never claim God privately revealed why something happened or what will happen.
 - Never promise healing, prosperity, reconciliation, or a particular answer to prayer.
 - Do not shame emotion, doubt, treatment, professional care, or other Christian traditions.

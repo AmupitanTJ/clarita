@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildChatInput, inferConversationIntent, inferConversationPhase, type ChatHistoryItem } from "../lib/chat.ts";
+import { buildChatInput, ensurePrayerEnding, inferConversationIntent, inferConversationPhase, REQUIRED_PRAYER_ENDING, type ChatHistoryItem } from "../lib/chat.ts";
 
 const noHistory: ChatHistoryItem[] = [];
 
@@ -46,4 +46,16 @@ test("passes an explicit prayer choice to the model even when the message is bri
   })) as { user_intent_hint: string; conversation_phase_hint: string };
   assert.equal(input.user_intent_hint, "pray");
   assert.equal(input.conversation_phase_hint, "explore");
+});
+
+test("enforces the required prayer ending without duplicating an existing amen", () => {
+  assert.equal(
+    ensurePrayerEnding("Father, give me wisdom. In Jesus’ name, amen."),
+    `Father, give me wisdom. ${REQUIRED_PRAYER_ENDING}`,
+  );
+  assert.equal(
+    ensurePrayerEnding(`Father, give me wisdom. ${REQUIRED_PRAYER_ENDING}`),
+    `Father, give me wisdom. ${REQUIRED_PRAYER_ENDING}`,
+  );
+  assert.equal(ensurePrayerEnding(null), null);
 });

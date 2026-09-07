@@ -127,8 +127,8 @@ export function getReviewedResponse(mood: MoodId, userText: string): ReviewedRes
         : "What feels most important to place honestly before God—without trying to make it sound better than it is?",
     prayer:
       mood === "grateful"
-        ? "God, thank you for the goodness I noticed today. Help me receive it with humility and share that goodness with someone else. Amen."
-        : "God, you see what I am carrying. Meet me with wisdom and steady care. Help me receive what is true, ask for the support I need, and take the next faithful step. Amen.",
+        ? "God, thank you for the goodness I noticed today. Help me receive it with humility and share that goodness with someone else. we ask and pray in the name of Jesus the Christ, Amen"
+        : "God, you see what I am carrying. Meet me with wisdom and steady care. Help me receive what is true, ask for the support I need, and take the next faithful step. we ask and pray in the name of Jesus the Christ, Amen",
     nextStep:
       mood === "lonely"
         ? "Read the full passage slowly, then send one simple message to someone safe: “Could we talk today?”"

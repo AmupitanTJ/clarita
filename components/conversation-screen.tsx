@@ -5,7 +5,7 @@ import { Archive, BookOpen, Check, Clipboard, Flag, History, LoaderCircle, Messa
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
-import type { ChatHistoryItem, ChatReply, SuggestedAction, SuggestedActionId } from "@/lib/chat";
+import { ensurePrayerEnding, type ChatHistoryItem, type ChatReply, type SuggestedAction, type SuggestedActionId } from "@/lib/chat";
 import { createClient, type Json } from "@/lib/supabase";
 
 type Conversation = {
@@ -82,6 +82,7 @@ function sortConversations(items: Conversation[]) {
 function assistantHistoryContent(message: Message) {
   const reply = message.reply;
   if (!reply) return message.content;
+  const prayer = ensurePrayerEnding(reply.prayer);
 
   const discussedScripture = reply.biblicalConnections
     .map((connection) => `${connection.name} (${connection.reference}): ${connection.connection}`)
@@ -91,7 +92,7 @@ function assistantHistoryContent(message: Message) {
     reply.message,
     reply.scriptureTransition,
     discussedScripture ? `Scripture already discussed:\n${discussedScripture}` : "",
-    reply.prayer ? `Prayer offered: ${reply.prayer}` : "",
+    prayer ? `Prayer offered: ${prayer}` : "",
     `Follow-up question: ${reply.question}`,
   ].filter(Boolean).join("\n\n");
 }
@@ -333,11 +334,12 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
       const transcript = (data ?? []).map((row) => {
         if (row.role === "user") return `You:\n${row.content}`;
         const reply = isChatReply(row.response_data) ? (row.response_data as unknown as ChatReply) : null;
+        const prayer = ensurePrayerEnding(reply?.prayer ?? null);
         const biblicalConnections = reply?.biblicalConnections.map((connection) =>
           `${connection.name} — ${connection.reference}\n${connection.testimony}\n${connection.connection}`
         ).join("\n\n");
         const response = reply
-          ? [reply.message, reply.scriptureTransition, biblicalConnections, reply.prayer ? `Prayer:\n${reply.prayer}` : "", reply.question]
+          ? [reply.message, reply.scriptureTransition, biblicalConnections, prayer ? `Prayer:\n${prayer}` : "", reply.question]
               .filter(Boolean)
               .join("\n\n")
           : row.content;
@@ -778,12 +780,13 @@ function ConversationMessage({ message, user, supabase, onNotice, isLatest, acti
 
   async function copyResponse() {
     const reply = message.reply;
+    const prayer = ensurePrayerEnding(reply?.prayer ?? null);
     const text = reply
       ? [
           reply.message,
           reply.scriptureTransition,
           ...reply.biblicalConnections.map((connection) => `${connection.name} — ${connection.reference}\n${connection.testimony}\n${connection.connection}`),
-          reply.prayer ? `Prayer\n${reply.prayer}` : "",
+          prayer ? `Prayer\n${prayer}` : "",
           reply.question,
         ].filter(Boolean).join("\n\n")
       : message.content;
@@ -821,6 +824,7 @@ function ConversationMessage({ message, user, supabase, onNotice, isLatest, acti
 
   if (message.role === "user") return <article className="chat-message chat-message--user"><p>{message.content}</p></article>;
   const reply = message.reply;
+  const prayer = ensurePrayerEnding(reply?.prayer ?? null);
   return (
     <article className="chat-message chat-message--assistant">
       <div className="chat-message__identity"><BrandMark compact /><span>Clarita</span></div>
@@ -833,7 +837,7 @@ function ConversationMessage({ message, user, supabase, onNotice, isLatest, acti
           <p>{connection.connection}</p>
         </div>
       ))}
-      {reply?.prayer && <div className="chat-prayer"><span>A prayer you can make your own</span><p>{reply.prayer}</p></div>}
+      {prayer && <div className="chat-prayer"><span>A prayer you can make your own</span><p>{prayer}</p></div>}
       {reply?.supportNote && <p className="emergency-notice">{reply.supportNote}</p>}
       {reply?.question && <p className="chat-question">{reply.question}</p>}
       {isLatest && actionsForReply(reply).length > 0 && (

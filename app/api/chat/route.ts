@@ -3,6 +3,7 @@ import {
   buildChatInput,
   CHAT_INSTRUCTIONS,
   chatReplyJsonSchema,
+  ensurePrayerEnding,
   inferConversationIntent,
   inferConversationPhase,
   type ChatHistoryItem,
@@ -70,7 +71,7 @@ function emergencyReply(): ChatReply {
     scriptureTransition: "",
     biblicalConnections: [],
     question: "Can you call your local emergency number now, or ask someone nearby to call and stay with you?",
-    prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. Amen.",
+    prayer: ensurePrayerEnding("God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help."),
     safetyLevel: "emergency",
     source: "safety",
     supportNote: "Clarita is not an emergency service. If you are in Nigeria, call 112 or go to the nearest emergency department. If you are elsewhere, contact your local emergency number now.",
@@ -104,7 +105,7 @@ function gratitudeFallback(message: string): ChatReply {
       },
     ],
     question: "What happened today that made gratitude rise in you?",
-    prayer: "God, thank you for the goodness I can see today. Keep me attentive to your mercy and help my gratitude become generosity, worship, and faithful living. Amen.",
+    prayer: ensurePrayerEnding("God, thank you for the goodness I can see today. Keep me attentive to your mercy and help my gratitude become generosity, worship, and faithful living."),
     safetyLevel: "ordinary",
     source: "reviewed",
     suggestedActions: [{ id: "talk_more", label: "Tell you more" }, { id: "pray", label: "Pray together" }],
@@ -127,7 +128,7 @@ function prayerFallback(mood: MoodId, history: ChatHistoryItem[]): ChatReply {
     message: "Yes—let’s pray together now. You can read this slowly, make the words your own, or simply let me pray alongside you.",
     scriptureTransition: "",
     biblicalConnections: [],
-    prayer: `Father, ${context} Please meet them in ${subjects[mood]}. Give them steadiness for today, wisdom for the next step, and people who will support them well. Help them remember that they do not need to hide fear or weakness from you. Hold what they cannot control, guide what they can do, and give them rest as they place this before you. In Jesus’ name, amen.`,
+    prayer: ensurePrayerEnding(`Father, ${context} Please meet them in ${subjects[mood]}. Give them steadiness for today, wisdom for the next step, and people who will support them well. Help them remember that they do not need to hide fear or weakness from you. Hold what they cannot control, guide what they can do, and give them rest as they place this before you.`),
     question: "Is there anything else you would like us to bring before God while we are here?",
     safetyLevel: "ordinary",
     source: "reviewed",
@@ -226,7 +227,7 @@ function reviewedFallback(message: string, mood: MoodId, history: ChatHistoryIte
       connection: passage.relevance,
     })),
     question: supportQuestions[mood],
-    prayer: reviewed.prayer,
+    prayer: ensurePrayerEnding(reviewed.prayer),
     safetyLevel: classifyLocally(message) === "sensitive" ? "sensitive" : "ordinary",
     source: "reviewed",
     suggestedActions: [{ id: "talk_more", label: "Keep talking" }, { id: "pray", label: "Pray together" }],
@@ -294,7 +295,8 @@ export async function POST(request: Request) {
     if (!response.ok) throw new Error(`Responses API returned ${response.status}`);
     const outputText = extractOutputText(await response.json());
     if (!outputText) throw new Error("Responses API returned no output text");
-    const reply = JSON.parse(outputText) as Omit<ChatReply, "source">;
+    const parsedReply = JSON.parse(outputText) as Omit<ChatReply, "source">;
+    const reply = { ...parsedReply, prayer: ensurePrayerEnding(parsedReply.prayer) };
     const outputModeration = await moderateText(
       apiKey,
       [reply.message, reply.scriptureTransition, reply.question, reply.prayer ?? ""].filter(Boolean).join("\n\n"),

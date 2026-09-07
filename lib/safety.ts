@@ -39,7 +39,7 @@ export function nigeriaEmergencyGuidance(): HeartGuidance {
     question: "Can you move away from anything you could use to hurt yourself or someone else and contact a trusted person who can stay with you now?",
     passages: [],
     reflection: "You do not have to manage this moment alone. Reaching a nearby person or emergency responder is the next priority.",
-    prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. Amen.",
+    prayer: "God, hold me in this moment and help me reach someone safe now. Give the people around me wisdom and urgency to help. we ask and pray in the name of Jesus the Christ, Amen",
     nextStep: "Call your local emergency number now or go to the nearest emergency department. If you are in Nigeria, call 112. If calling is difficult, message someone nearby: “I may be in danger. Please stay with me and help me get urgent support.”",
     safetyLevel: "emergency",
     source: "safety",
