@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Archive, BookOpen, Check, Clipboard, Flag, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
+import { Archive, BookOpen, Check, ChevronLeft, ChevronRight, Clipboard, Flag, History, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
 import type { MoodId } from "@/data/clarita-content";
@@ -44,6 +44,34 @@ function readMobileHistory() {
 
 function readServerMobileHistory() {
   return false;
+}
+
+const sidebarPreferenceEvent = "clarita-sidebar-preference";
+
+function subscribeToSidebarPreference(callback: () => void) {
+  window.addEventListener(sidebarPreferenceEvent, callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener(sidebarPreferenceEvent, callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function readSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem("clarita-sidebar-collapsed") === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setSidebarCollapsedPreference(collapsed: boolean) {
+  try {
+    window.localStorage.setItem("clarita-sidebar-collapsed", String(collapsed));
+  } catch {
+    return;
+  }
+  window.dispatchEvent(new Event(sidebarPreferenceEvent));
 }
 
 function isChatReply(value: Json | null): value is Json & ChatReply {
@@ -141,6 +169,7 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const historyCloseRef = useRef<HTMLButtonElement>(null);
   const isMobileHistory = useSyncExternalStore(subscribeToMobileHistory, readMobileHistory, readServerMobileHistory);
+  const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, readSidebarCollapsed, () => false);
   const userId = user?.id;
 
   const openConversation = useCallback(async (conversationId: string) => {
@@ -551,7 +580,7 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
   const visibleConversations = conversations.filter((thread) => historyView === "archived" ? Boolean(thread.archived_at) : !thread.archived_at);
 
   return (
-    <section className={`conversation page-enter ${historyEnabled ? "" : "conversation--temporary"}`}>
+    <section className={`conversation page-enter ${historyEnabled ? "" : "conversation--temporary"} ${sidebarCollapsed ? "conversation--sidebar-collapsed" : ""}`}>
       {historyEnabled && historyOpen && isMobileHistory && (
         <button
           type="button"
@@ -563,18 +592,29 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
       {historyEnabled && (
       <aside
         id="conversation-history"
-        className={`conversation__sidebar ${historyOpen ? "is-open" : ""}`}
+        className={`conversation__sidebar ${historyOpen ? "is-open" : ""} ${sidebarCollapsed ? "is-collapsed" : ""}`}
         aria-hidden={isMobileHistory && !historyOpen}
         inert={isMobileHistory && !historyOpen}
       >
         <div className="conversation__sidebar-heading">
           <span><History size={16} /> Conversations</span>
           <span className="conversation__sidebar-actions">
+            <button
+              type="button"
+              className="desktop-sidebar-toggle"
+              onClick={() => setSidebarCollapsedPreference(!sidebarCollapsed)}
+              aria-label={sidebarCollapsed ? "Expand conversation sidebar" : "Collapse conversation sidebar"}
+              aria-controls="conversation-history"
+              aria-expanded={!sidebarCollapsed}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+            </button>
             <button onClick={() => startNewConversation()} aria-label="Start a new conversation"><Plus size={17} /></button>
             <button ref={historyCloseRef} className="mobile-history-close" onClick={() => setHistoryOpen(false)} aria-label="Close conversation history"><X size={17} /></button>
           </span>
         </div>
-        <button className="new-conversation" onClick={() => startNewConversation()}><MessageCircle size={16} /> New conversation</button>
+        <button className="new-conversation" onClick={() => startNewConversation()} title="New conversation"><MessageCircle size={16} /><span>New conversation</span></button>
         <div className="conversation-list__filters" aria-label="Conversation history views">
           <button
             type="button"
@@ -684,7 +724,7 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
 
       <div className="conversation__main">
         <header className="conversation__header">
-          <div><BrandMark compact /><span><strong>Talk with Clarita</strong><small><Check size={12} /> {saveLabel}</small></span></div>
+          <div><span><strong>Talk with Clarita</strong><small><Check size={12} /> {saveLabel}</small></span></div>
           <div className="conversation__header-actions">
             {historyEnabled && (
               <button

@@ -213,22 +213,16 @@ export function ClaritaApp() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="desktop-brand" onClick={() => setScreen("welcome")}><BrandMark /></button>
+        <button className="desktop-brand" onClick={() => setScreen("welcome")} aria-label="Clarita home"><BrandMark /></button>
         <nav className="desktop-nav" aria-label="Primary navigation">
-          <button onClick={() => setScreen("welcome")} className={screen === "welcome" ? "active" : ""}><Home size={17} /> Today</button>
-          <button onClick={() => openTalk()} className={screen === "talk" ? "active" : ""}><MessageCircle size={17} /> Talk</button>
-          <button onClick={() => openTalk("faith")}><BookOpen size={17} /> Study</button>
-          <button onClick={() => openProtected("saved")} className={screen === "saved" ? "active" : ""}><Bookmark size={17} /> Saved</button>
-          <button onClick={() => openProtected("settings")} className={screen === "settings" ? "active" : ""}><UserRound size={17} /> You</button>
+          <button onClick={() => setScreen("welcome")} className={screen === "welcome" ? "active" : ""} aria-current={screen === "welcome" ? "page" : undefined}><Home size={17} /> Home</button>
+          <button onClick={() => openTalk()} className={screen === "talk" ? "active" : ""} aria-current={screen === "talk" ? "page" : undefined}><MessageCircle size={17} /> Talk</button>
+          <button onClick={() => openProtected("saved")} className={screen === "saved" ? "active" : ""} aria-current={screen === "saved" ? "page" : undefined}><Bookmark size={17} /> Saved</button>
+          <button onClick={() => openProtected("settings")} className={screen === "settings" ? "active" : ""} aria-current={screen === "settings" ? "page" : undefined}><UserRound size={17} /> You</button>
         </nav>
         <div className="topbar__actions">
           <button className="theme-toggle" onClick={() => setActiveTheme(theme === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-          <button className="privacy-pill" onClick={() => user?.is_anonymous === false ? setScreen("settings") : setScreen("auth")}>
-            <LockKeyhole size={14} />
-            <span className="privacy-pill__label">{user?.is_anonymous === false ? "Account" : user ? "Secure history" : "Sign in"}</span>
-            <span className="privacy-pill__suffix">· Private</span>
           </button>
         </div>
       </header>
@@ -538,11 +532,10 @@ function SettingsScreen({ user, supabase, onNotice, theme, onTheme, motion, onMo
 function MobileNav({ screen, onHome, onTalk, onSaved, onSettings }: { screen: Screen; onHome: () => void; onTalk: () => void; onSaved: () => void; onSettings: () => void }) {
   return (
     <nav className="mobile-nav" aria-label="Mobile navigation">
-      <button onClick={onHome} className={screen === "welcome" ? "active" : ""}><Home /><span>Today</span></button>
-      <button onClick={() => onTalk()} className={screen === "talk" ? "active" : ""}><MessageCircle /><span>Talk</span></button>
-      <button className="mobile-nav__talk" onClick={() => onTalk()} aria-label="Talk to Clarita"><BrandMark compact /></button>
-      <button onClick={onSaved} className={screen === "saved" ? "active" : ""}><Bookmark /><span>Saved</span></button>
-      <button onClick={onSettings} className={screen === "settings" ? "active" : ""}><UserRound /><span>You</span></button>
+      <button onClick={onHome} className={screen === "welcome" ? "active" : ""} aria-current={screen === "welcome" ? "page" : undefined}><Home /><span>Home</span></button>
+      <button onClick={() => onTalk()} className={screen === "talk" ? "active" : ""} aria-label="Talk to Clarita" aria-current={screen === "talk" ? "page" : undefined}><MessageCircle /><span>Talk</span></button>
+      <button onClick={onSaved} className={screen === "saved" ? "active" : ""} aria-current={screen === "saved" ? "page" : undefined}><Bookmark /><span>Saved</span></button>
+      <button onClick={onSettings} className={screen === "settings" ? "active" : ""} aria-current={screen === "settings" ? "page" : undefined}><UserRound /><span>You</span></button>
     </nav>
   );
 }
