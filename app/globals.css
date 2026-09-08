@@ -52,11 +52,17 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .app-sidebar button { min-width: 0; min-height: 44px; border: 0; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; gap: 11px; overflow: hidden; white-space: nowrap; background: transparent; color: var(--muted); cursor: pointer; }
 .app-sidebar button > svg { flex: 0 0 18px; }
 .app-sidebar button:hover, .app-sidebar button.active { background: var(--mist); color: var(--teal-dark); }
-.app-sidebar__toggle { border: 1px solid var(--line) !important; background: var(--surface) !important; color: var(--teal) !important; }
-.sidebar-width-control { display: grid; gap: 7px; padding: 10px 8px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
-.sidebar-width-control input { width: 100%; accent-color: var(--teal); cursor: ew-resize; }
+.sidebar-collapse-icon { width: 36px !important; min-width: 36px !important; min-height: 36px !important; padding: 0 !important; display: grid !important; place-items: center; justify-self: end; border: 0 !important; border-radius: 9px !important; background: transparent !important; color: var(--teal) !important; cursor: pointer; }
+.sidebar-collapse-icon:hover { background: var(--mist) !important; }
+.sidebar-resizer { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize; touch-action: none; }
+.sidebar-resizer::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 2px; background: transparent; transition: background-color .15s ease; }
+.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after { background: var(--teal); }
+.sidebar-resizer:focus-visible { outline: 2px solid rgba(199,144,75,.55); outline-offset: -2px; }
+body.is-resizing-sidebar, body.is-resizing-sidebar * { cursor: col-resize !important; user-select: none !important; }
+body.is-resizing-sidebar .app-sidebar, body.is-resizing-sidebar .conversation { transition: none; }
 .app-sidebar.is-collapsed button { width: 44px; padding: 0; justify-content: center; }
 .app-sidebar.is-collapsed button span { display: none; }
+.app-sidebar.is-collapsed .sidebar-collapse-icon { justify-self: center; }
 .page-enter { animation: enter .5s cubic-bezier(.2,.8,.2,1); }
 @keyframes enter { from { opacity: 0; transform: translateY(9px); } }
 
@@ -172,7 +178,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .prototype-note strong { display: block; color: var(--ink); }
 
 .conversation { display: grid; grid-template-columns: var(--app-sidebar-width, 68px) minmax(0, 1fr); min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); background: var(--surface); transition: grid-template-columns .22s ease; }
-.conversation__sidebar { min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--ivory) 74%, var(--surface)); padding: 14px 10px; display: flex; flex-direction: column; }
+.conversation__sidebar { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--ivory) 74%, var(--surface)); padding: 14px 10px; display: flex; flex-direction: column; }
 .conversation-sidebar__global { display: grid; gap: 7px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
 .conversation-sidebar__global > button, .conversation-sidebar__nav button, .conversation-sidebar__you { min-width: 0; min-height: 44px; border: 0; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; gap: 11px; overflow: hidden; white-space: nowrap; background: transparent; color: var(--muted); cursor: pointer; }
 .conversation-sidebar__global > button { border: 1px solid var(--line); background: var(--surface); color: var(--teal); }
@@ -185,7 +191,6 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
 .conversation__sidebar-heading > span { display: flex; align-items: center; gap: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; color: var(--muted); }
 .conversation__sidebar-heading button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); cursor: pointer; }
 .conversation__sidebar-actions { display: flex; gap: 5px; }
-.desktop-sidebar-toggle { display: grid !important; }
 .mobile-history-close, .mobile-history-toggle { display: none !important; }
 .new-conversation { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--teal); color: white; padding: 11px 13px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .conversation-list__filters { margin-top: 12px; padding: 3px; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--mist) 45%, transparent); }
@@ -416,6 +421,7 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
   .conversation__sidebar.is-collapsed .conversation-list { display: none; }
   .conversation__sidebar.is-collapsed .new-conversation { width: 44px; height: 44px; margin-inline: auto; padding: 0; }
   .conversation__sidebar.is-collapsed .new-conversation > span { display: none; }
+  .conversation__sidebar.is-collapsed .sidebar-collapse-icon { justify-self: center; }
 }
 
 @media (max-width: 900px) {
@@ -466,7 +472,6 @@ main { min-height: calc(100vh - 76px); min-height: calc(100dvh - 76px); }
   .conversation-sidebar__global, .conversation-sidebar__footer { display: none; }
   .conversation__sidebar.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; transition-delay: 0s; }
   .conversation__backdrop { position: fixed; display: block; z-index: 41; inset: 60px 0 calc(72px + env(safe-area-inset-bottom)); border: 0; background: rgba(5,14,13,.46); cursor: pointer; }
-  .desktop-sidebar-toggle { display: none !important; }
   .mobile-history-close, .mobile-history-toggle { display: flex !important; }
   .conversation__main { height: calc(100vh - 132px); height: calc(100dvh - 132px - env(safe-area-inset-bottom)); }
   .conversation__header { padding: 10px 14px; }

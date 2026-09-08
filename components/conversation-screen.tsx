@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Archive, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight, Clipboard, Flag, History, Home, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, UserRound, X } from "lucide-react";
+import { Archive, BookOpen, Bookmark, Check, Clipboard, Flag, History, Home, LoaderCircle, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCcw, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, UserRound, X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { BrandMark } from "@/components/brand-mark";
+import { SidebarResizer, SidebarToggle } from "@/components/sidebar-controls";
 import type { MoodId } from "@/data/clarita-content";
 import { ensurePrayerEnding, type ChatHistoryItem, type ChatReply, type SuggestedAction, type SuggestedActionId } from "@/lib/chat";
 import { createClient, type Json } from "@/lib/supabase";
@@ -574,17 +575,7 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
         inert={isMobileHistory && !historyOpen}
       >
         <div className="conversation-sidebar__global">
-          <button
-            type="button"
-            className="desktop-sidebar-toggle"
-            onClick={onToggleSidebar}
-            aria-label={sidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-            aria-controls="conversation-history"
-            aria-expanded={!sidebarCollapsed}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? <ChevronRight size={18} /> : <><ChevronLeft size={18} /><span>Collapse</span></>}
-          </button>
+          <SidebarToggle collapsed={sidebarCollapsed} onToggle={onToggleSidebar} controls="conversation-history" />
           <nav className="conversation-sidebar__nav" aria-label="Primary navigation">
             <button type="button" onClick={onHome} title="Home"><Home size={18} /><span>Home</span></button>
             <button type="button" className="active" aria-current="page" title="Talk"><MessageCircle size={18} /><span>Talk</span></button>
@@ -703,14 +694,9 @@ export function ConversationScreen({ mood, user, supabase, historyEnabled, onNot
           </div>
         </div>}
         <div className="conversation-sidebar__footer">
-          {!sidebarCollapsed && (
-            <label className="sidebar-width-control">
-              <span>Sidebar width</span>
-              <input type="range" min="190" max="300" step="10" value={sidebarWidth} onChange={(event) => onSidebarWidth(Number(event.target.value))} />
-            </label>
-          )}
           <button type="button" className="conversation-sidebar__you" onClick={onYou} title="You"><UserRound size={18} /><span>You</span></button>
         </div>
+        {!sidebarCollapsed && <SidebarResizer width={sidebarWidth} onWidth={onSidebarWidth} />}
       </aside>
 
       <div className="conversation__main">

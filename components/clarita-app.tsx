@@ -6,8 +6,6 @@ import {
   ArrowRight,
   BookOpen,
   Bookmark,
-  ChevronLeft,
-  ChevronRight,
   Home,
   LockKeyhole,
   LogOut,
@@ -26,6 +24,7 @@ import {
 import { BrandMark } from "@/components/brand-mark";
 import { AuthScreen, captchaWaitMessage } from "@/components/auth-screen";
 import { ConversationScreen } from "@/components/conversation-screen";
+import { SidebarResizer, SidebarToggle } from "@/components/sidebar-controls";
 import { moods, type MoodId } from "@/data/clarita-content";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -289,19 +288,9 @@ type AppSidebarProps = {
 
 function AppSidebar({ screen, collapsed, width, onToggle, onWidth, onHome, onTalk, onSaved, onYou }: AppSidebarProps) {
   return (
-    <aside className={`app-sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Clarita navigation">
+    <aside id="app-sidebar" className={`app-sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Clarita navigation">
       <div className="app-sidebar__top">
-        <button
-          type="button"
-          className="app-sidebar__toggle"
-          onClick={onToggle}
-          aria-label={collapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          {!collapsed && <span>Collapse</span>}
-        </button>
+        <SidebarToggle collapsed={collapsed} onToggle={onToggle} controls="app-sidebar" />
         <nav className="app-sidebar__nav" aria-label="Primary navigation">
           <button type="button" onClick={onHome} className={screen === "welcome" ? "active" : ""} aria-current={screen === "welcome" ? "page" : undefined} title="Home"><Home size={18} /><span>Home</span></button>
           <button type="button" onClick={onTalk} className={screen === "talk" ? "active" : ""} aria-current={screen === "talk" ? "page" : undefined} title="Talk"><MessageCircle size={18} /><span>Talk</span></button>
@@ -309,14 +298,9 @@ function AppSidebar({ screen, collapsed, width, onToggle, onWidth, onHome, onTal
         </nav>
       </div>
       <div className="app-sidebar__bottom">
-        {!collapsed && (
-          <label className="sidebar-width-control">
-            <span>Sidebar width</span>
-            <input type="range" min="190" max="300" step="10" value={width} onChange={(event) => onWidth(Number(event.target.value))} />
-          </label>
-        )}
         <button type="button" className={`app-sidebar__you ${screen === "settings" ? "active" : ""}`} onClick={onYou} aria-current={screen === "settings" ? "page" : undefined} title="You"><UserRound size={18} /><span>You</span></button>
       </div>
+      {!collapsed && <SidebarResizer width={width} onWidth={onWidth} />}
     </aside>
   );
 }
