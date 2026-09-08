@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import {
   ArrowRight,
   BookOpen,
   Bookmark,
+  ChevronLeft,
+  ChevronRight,
   Home,
   LockKeyhole,
   LogOut,
@@ -99,6 +101,8 @@ export function ClaritaApp() {
   const [savedNotes, setSavedNotes] = useState<SavedNote[]>([]);
   const [historyEnabled, setHistoryEnabled] = useState(true);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
   const [pendingScreen, setPendingScreen] = useState<Exclude<Screen, "auth" | "welcome">>("talk");
   const theme = useSyncExternalStore(subscribeTheme, readTheme, (): Theme => "light");
   const textSize = useSyncExternalStore(subscribePreferences, readTextSize, (): TextSize => "standard");
@@ -210,16 +214,14 @@ export function ClaritaApp() {
     openProtected("talk", selectedMood);
   }
 
+  const permanentUser = user?.is_anonymous === false;
+  const talkIsVisible = screen === "talk" && permanentUser;
+  const effectiveSidebarWidth = sidebarCollapsed ? 68 : sidebarWidth;
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${talkIsVisible ? "app-shell--talk" : ""}`} style={{ "--app-sidebar-width": `${effectiveSidebarWidth}px` } as CSSProperties}>
       <header className="topbar">
         <button className="desktop-brand" onClick={() => setScreen("welcome")} aria-label="Clarita home"><BrandMark /></button>
-        <nav className="desktop-nav" aria-label="Primary navigation">
-          <button onClick={() => setScreen("welcome")} className={screen === "welcome" ? "active" : ""} aria-current={screen === "welcome" ? "page" : undefined}><Home size={17} /> Home</button>
-          <button onClick={() => openTalk()} className={screen === "talk" ? "active" : ""} aria-current={screen === "talk" ? "page" : undefined}><MessageCircle size={17} /> Talk</button>
-          <button onClick={() => openProtected("saved")} className={screen === "saved" ? "active" : ""} aria-current={screen === "saved" ? "page" : undefined}><Bookmark size={17} /> Saved</button>
-          <button onClick={() => openProtected("settings")} className={screen === "settings" ? "active" : ""} aria-current={screen === "settings" ? "page" : undefined}><UserRound size={17} /> You</button>
-        </nav>
         <div className="topbar__actions">
           <button className="theme-toggle" onClick={() => setActiveTheme(theme === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
@@ -227,10 +229,24 @@ export function ClaritaApp() {
         </div>
       </header>
 
+      {!talkIsVisible && (
+        <AppSidebar
+          screen={screen}
+          collapsed={sidebarCollapsed}
+          width={sidebarWidth}
+          onToggle={() => setSidebarCollapsed((current) => !current)}
+          onWidth={setSidebarWidth}
+          onHome={() => setScreen("welcome")}
+          onTalk={() => openTalk()}
+          onSaved={() => openProtected("saved")}
+          onYou={() => openProtected("settings")}
+        />
+      )}
+
       <main>
         {screen === "welcome" && <WelcomeScreen onTalk={openTalk} />}
         {screen === "auth" && <AuthScreen user={user} supabase={supabase} getCaptchaToken={getCaptchaToken} resetCaptcha={() => { turnstileRef.current?.reset(); setCaptchaStatus(turnstileSiteKey ? "ready" : "not-required"); }} captchaStatus={captchaStatus} onBack={() => setScreen("welcome")} onNotice={setDataNotice} />}
-        {screen === "talk" && user?.is_anonymous === false && <ConversationScreen mood={mood} user={user} supabase={supabase} onNotice={setDataNotice} historyEnabled={historyEnabled} />}
+        {screen === "talk" && permanentUser && <ConversationScreen mood={mood} user={user} supabase={supabase} onNotice={setDataNotice} historyEnabled={historyEnabled} sidebarCollapsed={sidebarCollapsed} sidebarWidth={sidebarWidth} onToggleSidebar={() => setSidebarCollapsed((current) => !current)} onSidebarWidth={setSidebarWidth} onHome={() => setScreen("welcome")} onSaved={() => openProtected("saved")} onYou={() => openProtected("settings")} />}
         {screen === "saved" && user?.is_anonymous === false && <SavedScreen saved={savedPassages} notes={savedNotes} onRemovePassage={removeSavedPassage} onRemoveNote={removeSavedNote} onExplore={() => openTalk()} />}
         {screen === "settings" && user?.is_anonymous === false && <SettingsScreen user={user} supabase={supabase} onNotice={setDataNotice} theme={theme} onTheme={setActiveTheme} motion={motion} onMotion={setMotionEnabled} textSize={textSize} onTextSize={setTextSize} historyEnabled={historyEnabled} onHistoryEnabled={setHistoryEnabled} onSignedOut={() => setScreen("welcome")} />}
       </main>
@@ -256,6 +272,52 @@ export function ClaritaApp() {
 
       <MobileNav screen={screen} onHome={() => setScreen("welcome")} onTalk={() => openTalk()} onSaved={() => openProtected("saved")} onSettings={() => openProtected("settings")} />
     </div>
+  );
+}
+
+type AppSidebarProps = {
+  screen: Screen;
+  collapsed: boolean;
+  width: number;
+  onToggle: () => void;
+  onWidth: (width: number) => void;
+  onHome: () => void;
+  onTalk: () => void;
+  onSaved: () => void;
+  onYou: () => void;
+};
+
+function AppSidebar({ screen, collapsed, width, onToggle, onWidth, onHome, onTalk, onSaved, onYou }: AppSidebarProps) {
+  return (
+    <aside className={`app-sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Clarita navigation">
+      <div className="app-sidebar__top">
+        <button
+          type="button"
+          className="app-sidebar__toggle"
+          onClick={onToggle}
+          aria-label={collapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {!collapsed && <span>Collapse</span>}
+        </button>
+        <nav className="app-sidebar__nav" aria-label="Primary navigation">
+          <button type="button" onClick={onHome} className={screen === "welcome" ? "active" : ""} aria-current={screen === "welcome" ? "page" : undefined} title="Home"><Home size={18} /><span>Home</span></button>
+          <button type="button" onClick={onTalk} className={screen === "talk" ? "active" : ""} aria-current={screen === "talk" ? "page" : undefined} title="Talk"><MessageCircle size={18} /><span>Talk</span></button>
+          <button type="button" onClick={onSaved} className={screen === "saved" ? "active" : ""} aria-current={screen === "saved" ? "page" : undefined} title="Saved"><Bookmark size={18} /><span>Saved</span></button>
+        </nav>
+      </div>
+      <div className="app-sidebar__bottom">
+        {!collapsed && (
+          <label className="sidebar-width-control">
+            <span>Sidebar width</span>
+            <input type="range" min="190" max="300" step="10" value={width} onChange={(event) => onWidth(Number(event.target.value))} />
+          </label>
+        )}
+        <button type="button" className={`app-sidebar__you ${screen === "settings" ? "active" : ""}`} onClick={onYou} aria-current={screen === "settings" ? "page" : undefined} title="You"><UserRound size={18} /><span>You</span></button>
+      </div>
+    </aside>
   );
 }
 
