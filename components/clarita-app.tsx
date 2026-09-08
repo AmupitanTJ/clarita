@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import {
   ArrowRight,
@@ -100,6 +101,7 @@ export function ClaritaApp() {
   const [savedNotes, setSavedNotes] = useState<SavedNote[]>([]);
   const [historyEnabled, setHistoryEnabled] = useState(true);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [pageLeaving, setPageLeaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [pendingScreen, setPendingScreen] = useState<Exclude<Screen, "auth" | "welcome">>("talk");
@@ -107,6 +109,7 @@ export function ClaritaApp() {
   const textSize = useSyncExternalStore(subscribePreferences, readTextSize, (): TextSize => "standard");
   const motion = useSyncExternalStore(subscribePreferences, readMotion, () => true);
   const supabase = useMemo(() => createClient(), []);
+  const screenTransitionTimerRef = useRef<number | null>(null);
   const turnstileRef = useRef<TurnstileInstance>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [captchaStatus, setCaptchaStatus] = useState<"loading" | "ready" | "verifying" | "verified" | "error" | "not-required">(
@@ -132,6 +135,10 @@ export function ClaritaApp() {
     if (authState || authError || hash.has("error")) {
       window.history.replaceState({}, "", window.location.pathname);
     }
+  }, []);
+
+  useEffect(() => () => {
+    if (screenTransitionTimerRef.current !== null) window.clearTimeout(screenTransitionTimerRef.current);
   }, []);
 
   const loadSaved = useCallback(async (userId: string) => {
@@ -200,12 +207,39 @@ export function ClaritaApp() {
     if (!error && user) await loadSaved(user.id);
   }
 
+  function changeScreen(nextScreen: Screen) {
+    if (nextScreen === screen) return;
+
+    const updateScreen = () => {
+      flushSync(() => setScreen(nextScreen));
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
+    const reducedMotion = !motion || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      updateScreen();
+      return;
+    }
+
+    if (document.startViewTransition) {
+      document.startViewTransition(updateScreen);
+      return;
+    }
+
+    if (screenTransitionTimerRef.current !== null) window.clearTimeout(screenTransitionTimerRef.current);
+    setPageLeaving(true);
+    screenTransitionTimerRef.current = window.setTimeout(() => {
+      updateScreen();
+      window.requestAnimationFrame(() => setPageLeaving(false));
+      screenTransitionTimerRef.current = null;
+    }, 150);
+  }
+
   function openProtected(target: Exclude<Screen, "auth" | "welcome">, selectedMood?: MoodId) {
     if (selectedMood) setMood(selectedMood);
-    if (user?.is_anonymous === false) setScreen(target);
+    if (user?.is_anonymous === false) changeScreen(target);
     else {
       setPendingScreen(target);
-      setScreen("auth");
+      changeScreen("auth");
     }
   }
 
@@ -218,9 +252,9 @@ export function ClaritaApp() {
   const effectiveSidebarWidth = sidebarCollapsed ? 68 : sidebarWidth;
 
   return (
-    <div className={`app-shell ${talkIsVisible ? "app-shell--talk" : ""}`} style={{ "--app-sidebar-width": `${effectiveSidebarWidth}px` } as CSSProperties}>
+    <div className={`app-shell ${talkIsVisible ? "app-shell--talk" : ""} ${pageLeaving ? "is-page-leaving" : ""}`} style={{ "--app-sidebar-width": `${effectiveSidebarWidth}px` } as CSSProperties}>
       <header className="topbar">
-        <button className="desktop-brand" onClick={() => setScreen("welcome")} aria-label="Clarita home"><BrandMark /></button>
+        <button className="desktop-brand" onClick={() => changeScreen("welcome")} aria-label="Clarita home"><BrandMark /></button>
         <div className="topbar__actions">
           <button className="theme-toggle" onClick={() => setActiveTheme(theme === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
@@ -235,7 +269,7 @@ export function ClaritaApp() {
           width={sidebarWidth}
           onToggle={() => setSidebarCollapsed((current) => !current)}
           onWidth={setSidebarWidth}
-          onHome={() => setScreen("welcome")}
+          onHome={() => changeScreen("welcome")}
           onTalk={() => openTalk()}
           onSaved={() => openProtected("saved")}
           onYou={() => openProtected("settings")}
@@ -244,10 +278,10 @@ export function ClaritaApp() {
 
       <main>
         {screen === "welcome" && <WelcomeScreen onTalk={openTalk} />}
-        {screen === "auth" && <AuthScreen user={user} supabase={supabase} getCaptchaToken={getCaptchaToken} resetCaptcha={() => { turnstileRef.current?.reset(); setCaptchaStatus(turnstileSiteKey ? "ready" : "not-required"); }} captchaStatus={captchaStatus} onBack={() => setScreen("welcome")} onNotice={setDataNotice} />}
-        {screen === "talk" && permanentUser && <ConversationScreen mood={mood} user={user} supabase={supabase} onNotice={setDataNotice} historyEnabled={historyEnabled} sidebarCollapsed={sidebarCollapsed} sidebarWidth={sidebarWidth} onToggleSidebar={() => setSidebarCollapsed((current) => !current)} onSidebarWidth={setSidebarWidth} onHome={() => setScreen("welcome")} onSaved={() => openProtected("saved")} onYou={() => openProtected("settings")} />}
+        {screen === "auth" && <AuthScreen user={user} supabase={supabase} getCaptchaToken={getCaptchaToken} resetCaptcha={() => { turnstileRef.current?.reset(); setCaptchaStatus(turnstileSiteKey ? "ready" : "not-required"); }} captchaStatus={captchaStatus} onBack={() => changeScreen("welcome")} onNotice={setDataNotice} />}
+        {screen === "talk" && permanentUser && <ConversationScreen mood={mood} user={user} supabase={supabase} onNotice={setDataNotice} historyEnabled={historyEnabled} sidebarCollapsed={sidebarCollapsed} sidebarWidth={sidebarWidth} onToggleSidebar={() => setSidebarCollapsed((current) => !current)} onSidebarWidth={setSidebarWidth} onHome={() => changeScreen("welcome")} onSaved={() => openProtected("saved")} onYou={() => openProtected("settings")} />}
         {screen === "saved" && user?.is_anonymous === false && <SavedScreen saved={savedPassages} notes={savedNotes} onRemovePassage={removeSavedPassage} onRemoveNote={removeSavedNote} onExplore={() => openTalk()} />}
-        {screen === "settings" && user?.is_anonymous === false && <SettingsScreen user={user} supabase={supabase} onNotice={setDataNotice} theme={theme} onTheme={setActiveTheme} motion={motion} onMotion={setMotionEnabled} textSize={textSize} onTextSize={setTextSize} historyEnabled={historyEnabled} onHistoryEnabled={setHistoryEnabled} onSignedOut={() => setScreen("welcome")} />}
+        {screen === "settings" && user?.is_anonymous === false && <SettingsScreen user={user} supabase={supabase} onNotice={setDataNotice} theme={theme} onTheme={setActiveTheme} motion={motion} onMotion={setMotionEnabled} textSize={textSize} onTextSize={setTextSize} historyEnabled={historyEnabled} onHistoryEnabled={setHistoryEnabled} onSignedOut={() => changeScreen("welcome")} />}
       </main>
 
       {screen === "auth" && !user && turnstileSiteKey && (
@@ -269,7 +303,7 @@ export function ClaritaApp() {
 
       {dataNotice && <div className="data-toast" role="status" aria-live="polite"><span>{dataNotice}</span><button type="button" onClick={() => setDataNotice(null)} aria-label="Dismiss notification"><X size={15} /></button></div>}
 
-      <MobileNav screen={screen} onHome={() => setScreen("welcome")} onTalk={() => openTalk()} onSaved={() => openProtected("saved")} onSettings={() => openProtected("settings")} />
+      <MobileNav screen={screen} onHome={() => changeScreen("welcome")} onTalk={() => openTalk()} onSaved={() => openProtected("saved")} onSettings={() => openProtected("settings")} />
     </div>
   );
 }
